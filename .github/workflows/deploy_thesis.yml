@@ -1,0 +1,36 @@
+name: Build and Deploy Thesis
+on:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile LaTeX document
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: main.tex
+          compiler: lualatex
+          args: "-synctex=1 -interaction=nonstopmode -shell-escape"
+
+      - name: Prepare Deployment
+        run: |
+          mkdir -p deploy
+          cp main.pdf deploy/thesis.pdf
+          # Replace placeholders in index.html with actual GitHub info
+          REPO_NAME=$(basename ${{ github.repository }})
+          USER_NAME=${{ github.repository_owner }}
+          sed "s/{{repo_name}}/$REPO_NAME/g" wut-thesis/public/index.html | sed "s/{{github_user}}/$USER_NAME/g" > deploy/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy

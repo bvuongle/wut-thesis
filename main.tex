@@ -1,0 +1,120 @@
+%-----------------------------------------------
+%  Engineer's Thesis
+%  Warsaw University of Technology
+%-----------------------------------------------
+
+\documentclass[
+    bindingoffset=5mm,
+    footnoteindent=3mm,
+    hyphenation=true
+]{src/wut-thesis}
+
+\graphicspath{{tex/img/}}
+\addbibresource{bibliografia.bib}
+
+%-------------------------------------------------------------
+% Configuration
+%-------------------------------------------------------------
+\facultyeiti
+\EngineerThesis
+\langeng
+
+\begin{document}
+
+%------------------
+% Title Page
+%------------------
+\institute{Control and Computation Engineering}
+\major{Computer Science}
+\specialization{Software Engineering}
+\title{
+    Web/desktop application (TypeScript) for visualizing and composing dependency graphs between reusable software components
+}
+\engtitle{
+    Web/desktop application (TypeScript) for visualizing and composing dependency graphs between reusable software components
+}
+\author{Binh Vuong Le Duc}
+\album{330097}
+\supervisor{mgr inż. Sławomir Niespodziany}
+\date{\the\year}
+\maketitle
+
+%-------------------------
+% Abstract
+%-------------------------
+\cleardoublepage
+\abstract
+Modern embedded systems development increasingly relies on modular software architectures to manage complexity and enhance reusability. The \texttt{diff} framework, a custom-built dependency injection system for resource-constrained C++ environments, enables dynamic system configuration through JSON-based topology files. However, as the number of interconnected components grows, manual maintenance of these configuration files becomes error-prone and lacks intuitive structural oversight.
+
+This thesis presents the design and implementation of \texttt{diff-forge}, a desktop application developed with TypeScript, React, and Electron, specifically tailored for the visual composition of software topologies within the \texttt{diff} ecosystem. The proposed solution provides a graphical canvas for managing component instances and their dependencies, complemented by a real-time validation engine for cycle and orphan detection. By bridging the gap between abstract topology definitions and visual representation, \texttt{diff-forge} aims to improve developer productivity and reduce configuration errors in the assembly of complex embedded software systems.
+
+\keywords
+TypeScript, Electron, Dependency Injection, Visual Programming, Embedded Systems
+
+\pagestyle{plain}
+
+%-------------------------
+% Table of Contents
+%-------------------------
+\cleardoublepage
+\tableofcontents
+
+%-------------------------
+% Chapters
+%-------------------------
+\cleardoublepage
+\pagestyle{headings}
+
+\input{tex/1-introduction}
+\input{tex/2-background}
+\input{tex/3-framework}
+\input{tex/4-design}
+\input{tex/5-implementation}
+\input{tex/6-evaluation}
+\input{tex/7-conclusion}
+
+%-------------------------
+% Bibliography
+%-------------------------
+\cleardoublepage
+\printbibliography
+\clearpage
+
+%-------------------------
+% Symbols and Abbreviations
+%-------------------------
+\acronymlist
+\acronym{EiTI}{Faculty of Electronics and Information Technology}
+\acronym{WUT}{Warsaw University of Technology}
+\acronym{DI}{Dependency Injection}
+\acronym{IAiIS}{Institute of Control and Computation Engineering}
+\acronym{CBSE}{Component-Based Software Engineering}
+\acronym{GUI}{Graphical User Interface}
+\vspace{0.8cm}
+
+%-------------------------
+% Lists: Figures, Tables, Appendices
+%-------------------------
+\pagestyle{plain}
+
+\listoffigurestoc
+\vspace{1cm}
+\listoftablestoc
+\vspace{1cm}
+\listofappendicestoc
+
+%-------------------------
+% Appendices
+%-------------------------
+\captionsetup[figure]{list=no}
+\captionsetup[table]{list=no}
+
+\clearpage
+\appendix{User Manual}
+Instructions for installing and running \texttt{diff-forge}.
+
+\clearpage
+\appendix{Configuration Schema}
+The JSON schema used for component metadata.
+
+\end{document}

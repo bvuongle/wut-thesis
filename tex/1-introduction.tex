@@ -1,0 +1,28 @@
+\clearpage
+\section{Introduction}
+
+\subsection{Motivation}
+The rapid advancement of semiconductor technology and the increasing demand for sophisticated functionality in embedded systems have shifted the primary challenge of development from hardware constraints to software complexity~\cite{niespodziany2025}. As embedded devices integrate into critical infrastructure, such as automotive control units and industrial IoT gateways, the need for scalable and maintainable software architectures has never been greater. 
+
+In traditional embedded development, software components often exhibit coupling with the underlying hardware, hindering reusability across different projects. To address this, modular frameworks like \texttt{diff} utilize the Dependency Injection (DI) pattern~\cite{fowler2004di} to decouple component logic from system configuration. While this approach improves testability and flexibility, it introduces a new layer of complexity: the management of the dependency graph itself.
+
+In the current workflow, developers must manually define the system topology in structured JSON files. While functional, this ``blind wiring'' process is inherently error-prone. As system complexity increases, detecting circular dependencies, identifying unfulfilled requirements, or understanding the architecture from a text-based file becomes a significant cognitive burden. A specialized tool that provides visual feedback and automated verification during the system composition phase is essential.
+
+\subsection{Problem Statement}
+The core problem addressed by this thesis is the lack of a visual management layer for the \texttt{diff} dependency injection framework. Specifically:
+\begin{itemize}
+    \item \textbf{High Cognitive Load:} Managing hundreds of component connections in a JSON format is difficult to audit and visualize.
+    \item \textbf{Delayed Error Detection:} Structural issues, such as dependency cycles, are often only caught at runtime, leading to expensive debugging cycles.
+    \item \textbf{Configuration Fragility:} Manually editing IDs and dependency arrays is susceptible to typos and reference errors that a standard text editor cannot verify.
+\end{itemize}
+
+\subsection{Project Goals and Scope}
+The primary goal of this project is to develop \texttt{diff-forge}, a cross-platform desktop application that enables developers to visually compose, verify, and export software topologies. The application utilizes modern web technologies including TypeScript, React~\cite{reactjs}, and Electron~\cite{electronjs}. The specific goals of the application include:
+\begin{itemize}
+    \item Providing an intuitive drag-and-drop interface for instantiating components from a managed catalog.
+    \item Implementing a real-time validation engine to prevent structural errors before they reach the production environment.
+    \item Ensuring seamless integration with existing C++ development workflows by exporting framework-compliant configuration files.
+\end{itemize}
+
+\subsection{Thesis Structure}
+The following chapters comprise this thesis: Chapter~2 reviews the state of the art in dependency injection and visual programming. Chapter~3 provides an overview of the \texttt{diff} framework and its target use cases. Chapter~4 describes the architectural design of \texttt{diff-forge}, while Chapter~5 details its implementation. Lastly, Chapter~6 evaluates the tool's effectiveness, followed by concluding remarks in Chapter~7.

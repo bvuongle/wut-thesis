@@ -1,0 +1,18 @@
+# LaTeX build artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.pdf
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.lof
+*.lot
+build/
+deploy/
+public/
