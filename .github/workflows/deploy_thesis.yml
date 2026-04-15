@@ -19,16 +19,15 @@ jobs:
           root_file: main.tex
           compiler: latexmk
           args: "-pdflua -synctex=1 -interaction=nonstopmode -shell-escape"
-          working_directory: wut-thesis
 
       - name: Prepare Deployment
         run: |
           mkdir -p deploy
-          cp wut-thesis/main.pdf deploy/thesis.pdf
+          cp main.pdf deploy/thesis.pdf
           # Replace placeholders in index.html with actual GitHub info
           REPO_NAME=$(basename ${{ github.repository }})
           USER_NAME=${{ github.repository_owner }}
-          sed "s/{{repo_name}}/$REPO_NAME/g" wut-thesis/public/index.html | sed "s/{{github_user}}/$USER_NAME/g" > deploy/index.html
+          sed "s/{{repo_name}}/$REPO_NAME/g" public/index.html | sed "s/{{github_user}}/$USER_NAME/g" > deploy/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

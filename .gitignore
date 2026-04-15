@@ -6,7 +6,7 @@
 *.out
 *.synctex.gz
 *.toc
-*.pdf
+main.pdf
 *.bbl
 *.bcf
 *.blg
@@ -16,3 +16,7 @@
 build/
 deploy/
 public/
+
+# OS
+.DS_Store
+Thumbs.db
