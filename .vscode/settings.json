@@ -16,15 +16,18 @@
     ],
     "latex-workshop.latex.recipes": [
         {
-            "name": "lualatex ➞ build",
+            "name": "lualatex -> build",
             "tools": [
                 "lualatex"
             ]
         }
     ],
     "latex-workshop.latex.recipe.default": "first",
-    "latex-workshop.latex.autoBuild.run": "onSave",
+    "latex-workshop.latex.autoBuild.run": "onFileChange",
+    "latex-workshop.latex.autoBuild.interval": 1500,
     "latex-workshop.view.pdf.viewer": "tab",
+    "latex-workshop.synctex.afterBuild.enabled": true,
+    "latex-workshop.message.update.show": false,
     "ltex.language": "en-US",
     "ltex.enabled": true,
     "vale.path": "vale"

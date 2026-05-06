@@ -28,10 +28,13 @@
 \major{Computer Science}
 \specialization{Software Engineering}
 \title{
-    Web/desktop application (TypeScript) for visualizing and composing dependency graphs between reusable software components
+    Web/desktop application (TypeScript) for visualizing and composing dependency graph between reusable software components
 }
 \engtitle{
-    Web/desktop application (TypeScript) for visualizing and composing dependency graphs between reusable software components
+    Web/desktop application (TypeScript) for visualizing and composing dependency graph between reusable software components
+}
+\poltitle{
+    Aplikacja web/desktop (TypeScript) do wizualizacji i edycji grafu zależności pomiędzy reużywalnymi modułami oprogramowania
 }
 \author{Binh Vuong Le Duc}
 \album{330097}
@@ -40,16 +43,30 @@
 \maketitle
 
 %-------------------------
-% Abstract
+% Authorship Declaration
+%-------------------------
+\cleardoublepage
+\makeauthorship
+
+%-------------------------
+% Abstract (English)
 %-------------------------
 \cleardoublepage
 \abstract
-Modern embedded systems development increasingly relies on modular software architectures to manage complexity and enhance reusability. The \texttt{diff} framework, a custom-built dependency injection system for resource-constrained C++ environments, enables dynamic system configuration through JSON-based topology files. However, as the number of interconnected components grows, manual maintenance of these configuration files becomes error-prone and lacks intuitive structural oversight.
-
-This thesis presents the design and implementation of \texttt{diff-forge}, a desktop application developed with TypeScript, React, and Electron, specifically tailored for the visual composition of software topologies within the \texttt{diff} ecosystem. The proposed solution provides a graphical canvas for managing component instances and their dependencies, complemented by a real-time validation engine for cycle and orphan detection. By bridging the gap between abstract topology definitions and visual representation, \texttt{diff-forge} aims to improve developer productivity and reduce configuration errors in the assembly of complex embedded software systems.
+This thesis presents the design and implementation of a desktop application that visualizes and edits dependency graphs between reusable C++ embedded software modules. Module metadata is read from an Artifactory server or local git repositories and surfaced as a draggable catalog; the user composes the dependency graph according to project needs. The output is a topology file consumed by an existing CI/CD pipeline that builds a binary tailored to the chosen module composition. The application is implemented with Electron, React, and TypeScript, and replaces the manual JSON authoring workflow identified as future work in the framework's reference paper.
 
 \keywords
-TypeScript, Electron, Dependency Injection, Visual Programming, Embedded Systems
+dependency injection, visual programming, embedded systems, graph editing, Electron
+
+%-------------------------
+% Streszczenie (Polish)
+%-------------------------
+\cleardoublepage
+\secondabstract
+Niniejsza praca przedstawia projekt i implementację aplikacji desktopowej do wizualizacji i edycji grafów reprezentujących zależności pomiędzy reużywalnymi modułami oprogramowania wbudowanego napisanymi w~C++. Aplikacja odczytuje metadane modułów z~serwera Artifactory lub lokalnych repozytoriów git i prezentuje je w~formie przeciągalnego katalogu; użytkownik komponuje graf zależności zgodnie z~potrzebami projektu. Wynikiem działania są pliki topologii wykorzystywane przez istniejący potok CI/CD do zbudowania binarnej wersji aplikacji odpowiadającej wybranemu zestawowi modułów. Aplikację zaimplementowano w~technologiach Electron, React oraz TypeScript; zastępuje ona ręczne tworzenie pliku topologii w~formacie JSON, wskazane jako dalszy kierunek prac w~publikacji opisującej framework.
+
+\secondkeywords
+wstrzykiwanie zależności, programowanie wizualne, systemy wbudowane, edycja grafów, Electron
 
 \pagestyle{plain}
 
