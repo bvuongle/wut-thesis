@@ -8,27 +8,29 @@ The industry's response to this assembly problem is to formalize it: separate th
 
 While \textit{diff} improves reusability and flexibility, composing a product variant means editing the topology file manually. The developer must ensure its structural correctness, with limited tool support. This flow does not meet the demands of a reliable, repeatable engineering process~\cite{humble2010continuous}, and these demands grow with the size of the system.
 
-The industry's assembly problem and the framework's own proposal~\cite{niespodziany2025} together motivate \textbf{\textit{diff-forge}}~: a visual tool that supports managing the dependency graph, and producing JSON file consumed by the existing C++ without modification. Next section sets out the specific gaps that \textit{diff-forge} aims to resolve.
+The industry's assembly problem and the framework's own proposal~\cite{niespodziany2025} together motivate \textbf{\textit{diff-forge}}~: a visual tool that supports managing the dependency graph, and producing a JSON file consumed by the existing C++ build pipeline without modification. Next section sets out the specific gaps that \textit{diff-forge} aims to resolve.
 
 \subsection{Problem Statement}
 Manual maintenance of a \textit{diff} topology file imposes three major gaps along the developer's workflow. Each grows with the size of the system and the number of developers who work with the file.
 
-\textbf{Lack of module discovery.}
+\paragraph{Lack of module discovery.}
 Modules are distributed across Artifactory repositories, with many modules per repository and many versions per module. To compose a new system, the developer must learn which modules exist, what interfaces they expose, and what parameters they accept. This gap scales with the size of the catalog and the number of new systems assembled.
 
-\textbf{Lack of graph readability.}
+\paragraph{Lack of graph readability.}
 The dependency graph is encoded as text. To trace which components depend on a given module, or whether one component depends on another directly or transitively, the developer reads the JSON or runs a custom query against it. Every architectural question, from the impact of a change to the presence of a cycle, requires this reconstruction.
 
-\textbf{Lack of real-time validation feedback.}
+\paragraph{Lack of real-time validation feedback.}
 The JSON parser only checks syntax and is not capable of detecting lexical errors within each entry's configuration fields (such as identifiers, dependency references, parameters, \ldots), or structural errors across the JSON file (cycles, unmet dependencies, interface mismatches). These errors are caught only when the binary starts, in CI, or during code review. A broken build blocks other developers, and responsibility for fixing it often falls to someone other than the original author.
 
-\subsection{Project Goals and Scope}
-The primary goal of this project is to develop \texttt{diff-forge}, a cross-platform desktop application that enables developers to visually compose, verify, and export software topologies. The application utilizes modern web technologies including TypeScript, React~\cite{reactjs}, and Electron~\cite{electronjs}. The specific goals of the application include:
+\subsection{Project Objectives}
+With the problem defined, the success criteria of this project follow. The tool must close each of the three gaps from the previous section, and must do so without disrupting the existing build flow.
+
 \begin{itemize}
-    \item Providing an intuitive drag-and-drop interface for instantiating components from a managed catalog.
-    \item Implementing a real-time validation engine to prevent structural errors before they reach the production environment.
-    \item Ensuring seamless integration with existing C++ development workflows by exporting framework-compliant configuration files.
+    \item \textbf{Discover modules from the catalog.} The tool fetches available modules from Artifactory at startup and presents them in a searchable side panel. Each entry displays the module's general information (name, version, Artifactory source).
+    \item \textbf{Compose the graph visually.} A drag-and-drop canvas displays module instances as nodes and their dependencies as edges. The developer instantiates a module by dragging it from the catalo onto the canvas, wires dependencies by drawing edges between nodes, and edits each instance's configuration through inline fields on the node itself. The result is that the dependency graph is read and edited as a graph, not as JSON text.
+    \item \textbf{Validate at edit time.} The editor validates parameter inputs, wired dependency types, and identifier references against the catalog as the developer makes changes. Per-entry violations (invalid parameter value or duplicate instance identifier) raise visible feedback on the offending node or edge. Graph-wide violations (cycles, unmet required interfaces) raise when the user tries to export the topology file, with feedback on all offending entries.
+    \item \textbf{Import and export JSON topologies.} The editor imports an existing topology file so the developer can resume previous work, reports corruption or schema mismatches with the location of the offending entry, and exports the canvas state to the same path so the existing C++ build pipeline picks it up without modification.
 \end{itemize}
 
 \subsection{Thesis Structure}
-The following chapters comprise this thesis: Chapter~2 reviews the state of the art in dependency injection and visual programming. Chapter~3 provides an overview of the \texttt{diff} framework and its target use cases. Chapter~4 describes the architectural design of \texttt{diff-forge}, while Chapter~5 details its implementation. Lastly, Chapter~6 evaluates the tool's effectiveness, followed by concluding remarks in Chapter~7.
+The remaining chapters proceed from foundations to evaluation. Chapter~2 covers the technical background on which this work rests: component-based software engineering in embedded systems, dependency injection and inversion of control in C++14, the \textit{diff} framework, and module distribution through Conan and Artifactory. It also reviews related work in visual composition for software systems and cross-platform desktop application frameworks. Chapter~3 analyses the problem in detail: it introduces the target user personas, the use cases the tool must support, and the functional and non-functional requirements that follow, and derives a set of architecture drivers from them. Chapter~4 describes the architectural design of \textit{diff-forge}, covering the technology stack selection, the hexagonal layering of the codebase, the catalog ingestion pipeline, the canvas interaction model, topology import and export, and the structural validation engine. Chapter~5 walks through the implementation, including project tooling, the inter-process communication contract, catalog ingestion, graph state management, canvas rendering, topology I/O, the validation engine, and the workspace flow. Chapter~6 evaluates the tool, covering the testing strategy, performance measurements, and a comparison against the manual JSON workflow, with notes on threats to validity. Chapter~7 summarises the contributions and lists candidate directions for future work.
