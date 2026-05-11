@@ -2,19 +2,25 @@
 \section{Introduction}
 
 \subsection{Motivation}
-The rapid advancement of semiconductor technology and the increasing demand for sophisticated functionality in embedded systems have shifted the primary challenge of development from hardware constraints to software complexity~\cite{niespodziany2025}. As embedded devices integrate into critical infrastructure, such as automotive control units and industrial IoT gateways, the need for scalable and maintainable software architectures has never been greater. 
+In the modern embedded systems development landscape, the cost of software exceeds the cost of designing the hardware it runs on~\cite{niespodziany2025}. As semiconductor technology advances and customer demand for broader, more sophisticated functionality grows, an embedded application is assembled by dozens of engineers across several teams, each one producing independent modules that recombine into many product variants across the device's lifetime.
 
-In traditional embedded development, software components often exhibit coupling with the underlying hardware, hindering reusability across different projects. To address this, modular frameworks like \texttt{diff} utilize the Dependency Injection (DI) pattern~\cite{fowler2004di} to decouple component logic from system configuration. While this approach improves testability and flexibility, it introduces a new layer of complexity: the management of the dependency graph itself.
+The industry's response to this assembly problem is to formalize it: separate the modules from the application that consumes them, and describe their composition in a structure independent of any single module's source code. The \textit{diff} framework, presented by Niespodziany~\cite{niespodziany2025}, embodies that response for C++ embedded software through data-driven dependency injection: the application's composition is described in a JSON topology file consumed at startup.
 
-In the current workflow, developers must manually define the system topology in structured JSON files. While functional, this ``blind wiring'' process is inherently error-prone. As system complexity increases, detecting circular dependencies, identifying unfulfilled requirements, or understanding the architecture from a text-based file becomes a significant cognitive burden. A specialized tool that provides visual feedback and automated verification during the system composition phase is essential.
+While \textit{diff} improves reusability and flexibility, composing a product variant means editing the topology file manually. The developer must ensure its structural correctness, with limited tool support. This flow does not meet the demands of a reliable, repeatable engineering process~\cite{humble2010continuous}, and these demands grow with the size of the system.
+
+The industry's assembly problem and the framework's own proposal~\cite{niespodziany2025} together motivate \textbf{\textit{diff-forge}}~: a visual tool that supports managing the dependency graph, and producing JSON file consumed by the existing C++ without modification. Next section sets out the specific gaps that \textit{diff-forge} aims to resolve.
 
 \subsection{Problem Statement}
-The core problem addressed by this thesis is the lack of a visual management layer for the \texttt{diff} dependency injection framework. Specifically:
-\begin{itemize}
-    \item \textbf{High Cognitive Load:} Managing hundreds of component connections in a JSON format is difficult to audit and visualize.
-    \item \textbf{Delayed Error Detection:} Structural issues, such as dependency cycles, are often only caught at runtime, leading to expensive debugging cycles.
-    \item \textbf{Configuration Fragility:} Manually editing IDs and dependency arrays is susceptible to typos and reference errors that a standard text editor cannot verify.
-\end{itemize}
+Manual maintenance of a \textit{diff} topology file imposes three major gaps along the developer's workflow. Each grows with the size of the system and the number of developers who work with the file.
+
+\textbf{Lack of module discovery.}
+Modules are distributed across Artifactory repositories, with many modules per repository and many versions per module. To compose a new system, the developer must learn which modules exist, what interfaces they expose, and what parameters they accept. This gap scales with the size of the catalog and the number of new systems assembled.
+
+\textbf{Lack of graph readability.}
+The dependency graph is encoded as text. To trace which components depend on a given module, or whether one component depends on another directly or transitively, the developer reads the JSON or runs a custom query against it. Every architectural question, from the impact of a change to the presence of a cycle, requires this reconstruction.
+
+\textbf{Lack of real-time validation feedback.}
+The JSON parser only checks syntax and is not capable of detecting lexical errors within each entry's configuration fields (such as identifiers, dependency references, parameters, \ldots), or structural errors across the JSON file (cycles, unmet dependencies, interface mismatches). These errors are caught only when the binary starts, in CI, or during code review. A broken build blocks other developers, and responsibility for fixing it often falls to someone other than the original author.
 
 \subsection{Project Goals and Scope}
 The primary goal of this project is to develop \texttt{diff-forge}, a cross-platform desktop application that enables developers to visually compose, verify, and export software topologies. The application utilizes modern web technologies including TypeScript, React~\cite{reactjs}, and Electron~\cite{electronjs}. The specific goals of the application include:
