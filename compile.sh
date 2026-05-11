@@ -14,7 +14,7 @@ latexmk -pdflua -synctex=1 -interaction=nonstopmode -outdir=build main.tex
 
 if [ $? -eq 0 ]; then
     cp build/main.pdf ./thesis.pdf
-    echo "Success! Thesis exported to main.pdf"
+    echo "Success! Thesis exported to thesis.pdf"
 else
     echo "Error: Compilation failed. Check the logs in the 'build' directory."
     exit 1

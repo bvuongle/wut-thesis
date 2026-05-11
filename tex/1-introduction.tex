@@ -19,7 +19,7 @@ Modules are distributed across Artifactory repositories, with many modules per r
 \paragraph{Lack of graph readability.}
 The dependency graph is encoded as text. To trace which components depend on a given module, or whether one component depends on another directly or transitively, the developer reads the JSON or runs a custom query against it. Every architectural question, from the impact of a change to the presence of a cycle, requires this reconstruction.
 
-\paragraph{Lack of real-time validation feedback.}
+\paragraph{Lack of validation.}
 The JSON parser only checks syntax and is not capable of detecting lexical errors within each entry's configuration fields (such as identifiers, dependency references, parameters, \ldots), or structural errors across the JSON file (cycles, unmet dependencies, interface mismatches). These errors are caught only when the binary starts, in CI, or during code review. A broken build blocks other developers, and responsibility for fixing it often falls to someone other than the original author.
 
 \subsection{Project Objectives}
@@ -27,9 +27,9 @@ With the problem defined, the success criteria of this project follow. The tool 
 
 \begin{itemize}
     \item \textbf{Discover modules from the catalog.} The tool fetches available modules from Artifactory at startup and presents them in a searchable side panel. Each entry displays the module's general information (name, version, Artifactory source).
-    \item \textbf{Compose the graph visually.} A drag-and-drop canvas displays module instances as nodes and their dependencies as edges. The developer instantiates a module by dragging it from the catalo onto the canvas, wires dependencies by drawing edges between nodes, and edits each instance's configuration through inline fields on the node itself. The result is that the dependency graph is read and edited as a graph, not as JSON text.
-    \item \textbf{Validate at edit time.} The editor validates parameter inputs, wired dependency types, and identifier references against the catalog as the developer makes changes. Per-entry violations (invalid parameter value or duplicate instance identifier) raise visible feedback on the offending node or edge. Graph-wide violations (cycles, unmet required interfaces) raise when the user tries to export the topology file, with feedback on all offending entries.
-    \item \textbf{Import and export JSON topologies.} The editor imports an existing topology file so the developer can resume previous work, reports corruption or schema mismatches with the location of the offending entry, and exports the canvas state to the same path so the existing C++ build pipeline picks it up without modification.
+    \item \textbf{Compose the graph visually.} A drag-and-drop canvas displays module instances as nodes and their dependencies as edges. The developer instantiates a module by dragging it from the catalog onto the canvas, wires dependencies by drawing edges between nodes, and edits each instance's configuration through inline fields on the node itself. The result is that the dependency graph is read and edited as a graph, not as JSON text.
+    \item \textbf{Validate and report.} The editor validates parameter inputs, wired dependency types, and identifier references against the catalog as the developer makes changes. Per-entry violations (invalid parameter value or duplicate instance identifier) raise visible feedback on the offending node or edge. Graph-wide violations (cycles, unmet required interfaces) raise when the user tries to export the topology file, with feedback on all offending entries.
+    \item \textbf{Import and export JSON topologies.} The editor imports an existing topology file so the developer can resume previous work, reports corruption or schema mismatches with the location of the offending entry, and exports the canvas state to JSON files that comply with existing build pipelines.
 \end{itemize}
 
 \subsection{Thesis Structure}
