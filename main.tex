@@ -12,6 +12,20 @@
 \graphicspath{{tex/img/}}
 \addbibresource{bibliografia.bib}
 
+\usepackage{booktabs}
+\usepackage{placeins}
+
+\lstset{
+    basicstyle=\ttfamily\normalsize,
+    breaklines=true,
+    breakatwhitespace=true,
+    postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space},
+    keepspaces=true,
+    showstringspaces=false,
+    columns=fullflexible,
+    tabsize=2,
+}
+
 %-------------------------------------------------------------
 % Configuration
 %-------------------------------------------------------------
@@ -101,12 +115,17 @@
 % Symbols and Abbreviations
 %-------------------------
 \acronymlist{}
-\acronym{EiTI}{Faculty of Electronics and Information Technology}
 \acronym{WUT}{Warsaw University of Technology}
-\acronym{DI}{Dependency Injection}
+\acronym{EiTI}{Faculty of Electronics and Information Technology}
 \acronym{IAiIS}{Institute of Control and Computation Engineering}
+\acronym{JSON}{JavaScript Object Notation}
+\acronym{CI}{Continuous Integration}
 \acronym{CBSE}{Component-Based Software Engineering}
-\acronym{GUI}{Graphical User Interface}
+\acronym{IoC}{Inversion of Control}
+\acronym{DI}{Dependency Injection}
+\acronym{CRTP}{Curiously Recurring Template Pattern}
+\acronym{DAG}{Directed Acyclic Graph}
+\acronym{IPC}{Inter-Process Communication}
 \vspace{0.8cm}
 
 %-------------------------
