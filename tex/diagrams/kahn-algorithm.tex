@@ -1,0 +1,49 @@
+\begin{tikzpicture}[
+    node/.style={circle, draw, thick, minimum size=0.8cm, fill=white},
+    arrow/.style={->, thick},
+    stepbox/.style={rectangle, draw, dashed, inner sep=0.3cm, fill=gray!5}
+]
+
+% Step 1
+\begin{scope}[local bounding box=s1]
+    \node[node, fill=green!10] (1a) {1};
+    \node[node, fill=green!10, right=1cm of 1a] (2a) {2};
+    \node[node, below=0.8cm of 1a] (3a) {3};
+    \node[node, right=1cm of 3a] (4a) {4};
+    \draw[arrow] (1a) -- (3a);
+    \draw[arrow] (2a) -- (3a);
+    \draw[arrow] (3a) -- (4a);
+    \node[below=0.1cm of 3a, xshift=0.5cm] {\small \textbf{Step 1:} Find nodes with in-degree 0 (1, 2)};
+\end{scope}
+
+% Step 2
+\begin{scope}[shift={(6,0)}, local bounding box=s2]
+    \node[node, opacity=0.3] (1b) {1};
+    \node[node, opacity=0.3, right=1cm of 1b] (2b) {2};
+    \node[node, fill=green!10, below=0.8cm of 1b] (3b) {3};
+    \node[node, right=1cm of 3b] (4b) {4};
+    \draw[arrow, opacity=0.3] (1b) -- (3b);
+    \draw[arrow, opacity=0.3] (2b) -- (3b);
+    \draw[arrow] (3b) -- (4b);
+    \node[below=0.1cm of 3b, xshift=0.5cm] {\small \textbf{Step 2:} Remove 1, 2. Node 3 in-degree $\to$ 0};
+\end{scope}
+
+% Step 3
+\begin{scope}[shift={(12,0)}, local bounding box=s3]
+    \node[node, opacity=0.3] (1c) {1};
+    \node[node, opacity=0.3, right=1cm of 1c] (2c) {2};
+    \node[node, opacity=0.3, below=0.8cm of 1c] (3c) {3};
+    \node[node, fill=green!10, right=1cm of 3c] (4c) {4};
+    \draw[arrow, opacity=0.3] (1c) -- (3c);
+    \draw[arrow, opacity=0.3] (2c) -- (3c);
+    \draw[arrow, opacity=0.3] (3c) -- (4c);
+    \node[below=0.1cm of 3c, xshift=0.5cm] {\small \textbf{Step 3:} Remove 3. Node 4 in-degree $\to$ 0};
+\end{scope}
+
+% Final Result
+\node[below=1.5cm of s2, align=center, fill=yellow!10, draw, thick] {
+    \textbf{Final Topological Order:}\\
+    $[1, 2, 3, 4]$
+};
+
+\end{tikzpicture}

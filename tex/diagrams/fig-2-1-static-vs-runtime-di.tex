@@ -1,0 +1,34 @@
+\begin{tikzpicture}[
+    node distance=17mm and 10mm,
+    box/.style={draw, rounded corners=2pt, minimum height=10mm, text width=24mm, align=center, font=\small},
+    artifact/.style={box, fill=gray!10},
+    process/.style={box, fill=blue!10},
+    wiring/.style={box, fill=blue!10, very thick, draw=orange!80!black},
+    output/.style={box, fill=green!10},
+    arr/.style={->, thick},
+    arrwiring/.style={->, very thick, draw=orange!80!black},
+    panel/.style={font=\small\bfseries}
+]
+% --- Panel A: Static DI ---
+\node[panel] (titleA) {Static DI};
+\node[artifact, below=4mm of titleA.south west, anchor=north west] (srcA) {Source code\\+ headers};
+\node[wiring, right=of srcA] (compA) {Compiler\\(links graph)};
+\node[output, right=of compA] (binA) {Wired binary};
+\node[output, right=of binA] (sysA) {Live system};
+\draw[arr] (srcA) -- (compA);
+\draw[arr] (compA) -- (binA);
+\draw[arr] (binA) -- (sysA);
+\node[font=\scriptsize\itshape, color=orange!80!black, below=0.5mm of compA] {wiring resolved};
+
+% --- Panel B: Runtime DI ---
+\node[panel, below=16mm of srcA.south west, anchor=north west] (titleB) {Runtime DI};
+\node[artifact, below=4mm of titleB.south west, anchor=north west] (srcB) {Source code};
+\node[process, right=of srcB] (compB) {Compiler};
+\node[output, right=of compB] (binB) {Generic binary};
+\node[output, right=of binB] (sysB) {Live system};
+\node[artifact, below=of binB] (jsonB) {JSON\\description};
+\draw[arr] (srcB) -- (compB);
+\draw[arr] (compB) -- (binB);
+\draw[arrwiring] (binB) -- node[above, font=\scriptsize\itshape, color=orange!80!black]{loader} (sysB);
+\draw[arrwiring] (jsonB) -- node[midway, sloped, above, font=\scriptsize\itshape, color=orange!80!black]{wiring resolved} (sysB);
+\end{tikzpicture}

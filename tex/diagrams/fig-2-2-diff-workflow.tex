@@ -1,0 +1,35 @@
+\begin{tikzpicture}[
+    node distance=6mm and 10mm,
+    box/.style={draw, rounded corners=2pt, minimum height=9mm, text width=24mm, align=center, font=\small},
+    source/.style={box, fill=gray!10},
+    registry/.style={box, fill=orange!20, draw=orange!80!black, thick},
+    process/.style={box, fill=blue!10},
+    output/.style={box, fill=green!10},
+    arr/.style={->, thick},
+    dasharr/.style={->, thick, dashed, draw=orange!80!black},
+    phase/.style={font=\small\bfseries\itshape, anchor=west}
+]
+% --- Phase 1: static-init (before main) ---
+\node[phase] (phaseA) at (0,0) {Compile + static-init (before \texttt{main()})};
+
+\node[source, below=2mm of phaseA.south west, anchor=north west] (cls) {Component\\classes};
+\node[registry, right=22mm of cls] (factreg) {FactoryRegistry};
+\draw[arr] (cls) -- node[above, font=\scriptsize\itshape]{registered} (factreg);
+
+% --- Phase 2: runtime (in main) ---
+\node[phase, below=16mm of phaseA.south west, anchor=north west] (phaseB) {Runtime (in \texttt{main()})};
+
+\node[source, below=2mm of phaseB.south west, anchor=north west] (topo) {topology.json};
+\node[process, right=of topo] (loader) {TopologyLoader};
+\node[process, right=of loader] (build) {\texttt{diff::Build}};
+\node[registry, right=of build] (depreg) {DependencyRegistry};
+\node[output, below=8mm of depreg] (app) {Application\\\texttt{\scriptsize build.get<I>()}};
+
+\draw[arr] (topo) -- (loader);
+\draw[arr] (loader) -- (build);
+\draw[arr] (build) -- (depreg);
+\draw[arr] (depreg) -- (app);
+
+% --- Cross-phase: FactoryRegistry feeds Build ---
+\draw[dasharr] (factreg.south) -- ++(0,-8mm) -| (build.north) node[pos=0.25, above, font=\scriptsize\itshape, color=orange!80!black] {lookup by type};
+\end{tikzpicture}
