@@ -1,23 +1,24 @@
 \begin{tikzpicture}[
-    node distance=6mm and 10mm,
-    box/.style={draw, rounded corners=2pt, minimum height=9mm, text width=24mm, align=center, font=\small},
-    source/.style={box, fill=gray!10},
+    node distance=6mm and 8mm,
+    box/.style={draw, rounded corners=2pt, minimum height=9mm, text width=34mm, align=center, font=\small, inner sep=2pt},
+    source/.style={box, fill=gray!10, text width=24mm},
     registry/.style={box, fill=orange!20, draw=orange!80!black, thick},
     process/.style={box, fill=blue!10},
-    output/.style={box, fill=green!10},
+    output/.style={box, fill=green!10, text width=28mm},
     arr/.style={->, thick},
     dasharr/.style={->, thick, dashed, draw=orange!80!black},
-    phase/.style={font=\small\bfseries\itshape, anchor=west}
+    phase/.style={font=\small\bfseries\itshape, anchor=west},
+    every node/.append style={execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}}
 ]
 % --- Phase 1: static-init (before main) ---
-\node[phase] (phaseA) at (0,0) {Compile + static-init (before \texttt{main()})};
+\node[phase] (phaseA) at (0,0) {Compile + static-init};
 
 \node[source, below=2mm of phaseA.south west, anchor=north west] (cls) {Component\\classes};
 \node[registry, right=22mm of cls] (factreg) {FactoryRegistry};
 \draw[arr] (cls) -- node[above, font=\scriptsize\itshape]{registered} (factreg);
 
 % --- Phase 2: runtime (in main) ---
-\node[phase, below=16mm of phaseA.south west, anchor=north west] (phaseB) {Runtime (in \texttt{main()})};
+\node[phase, below=16mm of phaseA.south west, anchor=north west] (phaseB) {Runtime};
 
 \node[source, below=2mm of phaseB.south west, anchor=north west] (topo) {topology.json};
 \node[process, right=of topo] (loader) {TopologyLoader};

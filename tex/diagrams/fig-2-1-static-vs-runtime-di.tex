@@ -26,9 +26,9 @@
 \node[process, right=of srcB] (compB) {Compiler};
 \node[output, right=of compB] (binB) {Generic binary};
 \node[output, right=of binB] (sysB) {Live system};
-\node[artifact, below=of binB] (jsonB) {JSON\\description};
+\node[artifact, below=10mm of binB] (jsonB) {JSON\\description};
 \draw[arr] (srcB) -- (compB);
 \draw[arr] (compB) -- (binB);
 \draw[arrwiring] (binB) -- node[above, font=\scriptsize\itshape, color=orange!80!black]{loader} (sysB);
-\draw[arrwiring] (jsonB) -- node[midway, sloped, above, font=\scriptsize\itshape, color=orange!80!black]{wiring resolved} (sysB);
+\draw[arrwiring] (jsonB.east) -| node[pos=0.25, above, font=\scriptsize\itshape, color=orange!80!black] {wiring resolved} (sysB.south);
 \end{tikzpicture}
