@@ -1,9 +1,10 @@
 \clearpage
 \section{Background}
 
-This chapter establishes the technical and conceptual grounding upon which this thesis is based. Section~2.1 covers the foundations: component-based software engineering in embedded systems, the inversion of control and dependency injection patterns, the \textit{diff} framework itself, and the module distribution platform. Section~2.2 reviews related work in visual composition for software systems and in cross-platform desktop application frameworks.
+This chapter establishes the technical and conceptual grounding upon which this thesis is based. \S\ref{sec:foundations} covers the foundations: component-based software engineering in embedded systems, the inversion of control and dependency injection patterns, the \textit{diff} framework itself, and the module distribution platform. \S\ref{sec:related-work} reviews related work in visual composition for software systems and in cross-platform desktop application frameworks.
 
 \subsection{Foundations}
+\label{sec:foundations}
 
 \subsubsection{Component-Based Software Engineering in Embedded Systems}
 
@@ -111,6 +112,7 @@ The system's composition is described by a JSON \textit{topology} file. Each ent
 Because the binary's behavior is determined by the input JSON, a product variant is defined by a data change rather than a code change, hence the name \textit{data-driven} composition~\cite{niespodziany2025}. This data-driven approach allows one build to serve many variants. However, it shifts the validation burden from the compiler to the developer.
 
 \subsubsection{Module Distribution: Conan and Artifactory}
+\label{sec:module-distribution}
 
 The \textit{diff} ecosystem uses the \textbf{Conan} package manager~\cite{conan} to manage component lifecycles. Conan packages are identified by a name and version, and they carry build scripts (recipes) that describe how to compile and package the library. A standard Conan package follows this naming convention: \texttt{<name>/<version>@<user>/<channel>}.
 
@@ -137,12 +139,13 @@ In a \textit{diff}-based environment, each component is distributed as a Conan p
 \end{lstlisting}
 
 \subsection{Related Work}
+\label{sec:related-work}
 
 \subsubsection{Visual Composition for Software Systems}
 
 Visual composition tools allow developers to build software by arranging and connecting nodes on a canvas, replacing or supplementing textual code. The approach has a long history in domain-specific environments: LabVIEW~\cite{labview} for instrumentation and measurement software, Simulink~\cite{simulink} for control-system modeling, Node-RED~\cite{nodered} for IoT devices and web services.
 
-In all of these tools, the canvas is a directed graph. Nodes represent units of computation or component instances. Edges represent dataflow or dependency relationships. Two fundamental graph-theory concepts are particularly relevant to the design of \textit{diff-forge}: the directed acyclic graph and the algorithms used for ordering its nodes.
+In all of these tools, the canvas is a directed graph. Nodes represent units of computation or component instances. Edges represent dataflow or dependency relationships. Two fundamental graph-theory concepts are particularly relevant to the design of \textit{diff-forge}: the directed acyclic graph and the algorithm used for ordering its nodes.
 
 \paragraph{Directed Acyclic Graph (DAG)}
 is a finite directed graph that contains no directed cycles~\cite{cormen2009}. Each edge has a direction, and no sequence of edges returns to its starting node. DAGs are the natural model for dependency relationships in software. Each component depends on zero or more others, and a cycle would mean a transitive self-dependency that cannot be resolved during instantiation.
@@ -152,7 +155,7 @@ The \textit{diff} framework requires the topology to be a DAG. The loader will r
 \paragraph{Topological Sorting}
 produces a linear ordering of a DAG's nodes such that for every directed edge $(u, v)$, node $u$ appears before node $v$ in the sequence~\cite{cormen2009}. For a dependency graph, a topological order is a valid construction sequence as every component's dependencies appear before the component itself.
 
-Kahn's algorithm~\cite{kahn1962} is a widely used method for computing a topological order in linear time (Figure~\ref{fig:kahn-algorithm}). It begins with the set of nodes that have no incoming edges. At each step, it removes one such node from the set, appends it to the output, and reduces the in-degree of each neighbour. Any neighbour that drops to zero in-degree joins the set. The algorithm terminates when the set is empty. If all nodes have been emitted, the output is a valid topological order. If some nodes remain unemitted, the graph contains a cycle.
+Kahn's algorithm~\cite{kahn1962} is a widely used method for computing a topological order in linear time (Figure~\ref{fig:kahn-algorithm}). It begins with the set of nodes that have no incoming edges. At each step, it removes one such node from the set, appends it to the output, and reduces the in-degree of each neighbor. Any neighbor that drops to zero in-degree joins the set. The algorithm terminates when the set is empty. If all nodes have been emitted, the output is a valid topological order. If some nodes remain unemitted, the graph contains a cycle.
 
 \begin{figure}[ht]
     \centering
@@ -163,9 +166,10 @@ Kahn's algorithm~\cite{kahn1962} is a widely used method for computing a topolog
     \label{fig:kahn-algorithm}
 \end{figure}
 
-\textit{diff-forge} uses Kahn's algorithm during export. The topology JSON file requires entries to appear in load-compatible order (leaves before roots).
+\textit{diff-forge} uses Kahn's algorithm during export. The topology JSON file requires entries to appear in load-compatible order (dependencies before dependents).
 
 \subsubsection{Cross-Platform Desktop Application Frameworks}
+\label{sec:cross-platform-frameworks}
 Building a visual editor requires a framework that can target Windows, macOS, and Linux from a single codebase. The candidates differ along two primary dimensions: the rendering technology and the application's primary programming language. The choice of framework is critical, as it determines the type system, the available library ecosystem, and the overall architecture of the tool. Table~\ref{tab:cross-platform} summarizes the four frameworks considered for this project.
 \begin{table}[ht]
 \centering
@@ -184,10 +188,10 @@ Flutter Desktop & Skia               & Dart \\
 \end{tabular}
 \end{table}
 
-\textbf{Electron}~\cite{electronjs} bundles a Chromium browser and a Node.js runtime. The UI is developed using standard web technologies, while the backend interacts with the operating system through a multi-process architecture with a typed IPC bridge. Electron is backed by TypeScript and the npm ecosystem, providing access to graph-editing libraries like React Flow~\cite{react_flow} and schema-validation tools like Zod~\cite{zod}. While it offers a highly consistent development experience across platforms, the primary trade-off is the significant memory and binary size when bundling a full browser engine.
+\textbf{Electron}~\cite{electronjs} bundles a Chromium browser and a Node.js runtime. The UI is developed using standard web technologies, while the backend interacts with the operating system through a multi-process architecture with a typed IPC bridge. Electron is widely used with TypeScript and the npm ecosystem, providing access to graph-editing libraries like React Flow~\cite{react_flow} and schema-validation tools like Zod~\cite{zod}. While it offers a highly consistent development experience across platforms, the primary trade-off is the significant memory and binary size when bundling a full browser engine.
 
 \textbf{Qt}~\cite{qt} is a long-standing C++ framework that offers native-looking interfaces via its Widgets module and hardware-accelerated UIs through QML. Sharing the same programming language with \textit{diff} means sharing the same build system and package manager, making it a reasonable choice. However, the lack of first-class support for structural typing and idiomatic runtime schema-validation libraries means that boundary code (e.g., JSON parsing or IPC) requires more manual infrastructure compared to web-based alternatives.
 
-\textbf{Tauri}~\cite{tauri} is a Rust framework that uses the OS-provided WebView (WebKit on macOS, WebView2 on Windows, WebKitGTK on Linux) for the UI. It is performant, memory-safe. Reusing the OS WebView instead of bundling Chromium keeps packaged binaries significantly smaller than Electron's~\cite{tauribenchmarks}. The disadvantage of the framework is a less uniform rendering surface across platforms and a smaller library ecosystem.
+\textbf{Tauri}~\cite{tauri} uses the OS-provided WebView (WebKit on macOS, WebView2 on Windows, WebKitGTK on Linux) for the UI. It is performant, memory-safe by using Rust on host side. Utilizing the OS WebView instead of bundling Chromium keeps packaged binaries significantly smaller than Electron's~\cite{tauribenchmarks}. The disadvantage of the framework is a less uniform rendering surface across platforms and a smaller library ecosystem.
 
 \textbf{Flutter Desktop}~\cite{flutter} uses Google's Skia renderer to draw all UI elements directly. The result is a consistent look across platforms and full control over the rendering surface. This framework shares \textbf{Tauri} disadvantage, with a smaller library ecosystem than TypeScript. The node-and-edge graph-editor tooling on Dart is also less developed than the React Flow library.

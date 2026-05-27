@@ -8,7 +8,7 @@ The \textit{diff} framework~\cite{niespodziany2025} resolves this problem throug
 
 However, writing the topology file remains a manual, error-prone process. The developer must ensure its structural correctness while working with limited tool support. This problem enlarges along with the size of the application and the broader ecosystem, such as the number of available modules, variant count, and team size.
 
-This thesis extends the future work identified in Niespodziany's research~\cite{niespodziany2025} by introducing \textbf{\textit{diff-forge}}: a visual editor that allows developers to manage the application's dependency graph directly as a graph, while continuing to produce the exact JSON topology file consumed by the existing C++ build pipeline. The next section details the specific gaps that \textit{diff-forge} aims to resolve.
+This thesis extends the future work identified in Niespodziany's research~\cite{niespodziany2025} by introducing \textbf{\textit{diff-forge}}: a visual editor that allows developers to manage the application's dependencies directly as a graph, while continuing to produce the exact JSON topology file consumed by the existing C++ build pipeline. The next section details the specific gaps that \textit{diff-forge} aims to resolve.
 
 \subsection{Problem Statement}
 The manual maintenance of \textit{diff} topology files leaves three distinct gaps in the current workflow. 
@@ -17,7 +17,7 @@ The manual maintenance of \textit{diff} topology files leaves three distinct gap
 Available modules are distributed across Artifactory repositories, often with many modules per repository and many versions per module. To compose a new system, the developer must be aware of what modules exist, what interfaces they expose, and what parameters they accept as module configuration.
 
 \paragraph{Lack of graph readability.}
-The dependency graph is currently encoded as text within a JSON file. Every architectural inquiry, such as tracing direct or transitive dependencies between modules, requires the developer to manually reconstruct the graph from the JSON source. Without a visual representation, analyzing the system's structure becomes a time-consuming and error-prone process.
+The dependency graph is currently encoded as text within a JSON file. Every architectural inquiry, such as tracing direct or transitive dependencies between modules, requires the developer to manually analyze from the JSON source. Without a visual representation, analyzing the system's structure becomes a time-consuming process.
 
 \paragraph{Lack of validation.}
 The JSON parser used during development provides syntactic correctness while lacking the capability of detecting per-entry lexical errors (e.g., invalid identifiers, incorrect references, or malformed values) or graph-structural errors (e.g., cycles, unmet required interfaces, or interface mismatches). These errors are caught only when the binary starts, in continuous integration (CI), or during code review. A broken build blocks other developers, and the responsibility for fixing it often falls to someone other than the original author~\cite{humble2010continuous}.
