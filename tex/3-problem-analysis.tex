@@ -55,7 +55,7 @@ The integrator's interaction with \textit{diff-forge} breaks down into six use c
 \noindent\textbf{Precondition:} the workspace directory already contains its \texttt{.forge.json} topology file, detected on launch (UC1).
 \begin{enumerate}
     \item The tool reads the topology file and checks it for corruption before using it.
-    \item From the topology entries, the tool builds an in-memory directed acyclic grap.
+    \item From the topology entries, the tool builds an in-memory directed acyclic graph.
     \item The tool lays out that graph and renders it on the canvas.
     \item The actor changes a configuration value, adds or removes a node or edge, and exports.
 \end{enumerate}
@@ -204,7 +204,7 @@ The core logic has to be testable on its own (NFR-4.1), and the parts that reach
 The tool has to run on macOS, Windows, and Linux from one codebase (NFR-5.1), and the part that draws the interface must not reach the filesystem or the network on its own (NFR-6.1). Both point to the same kind of runtime, a desktop shell that keeps the interface in one process and the system access in another, with a typed channel between them. \S\ref{sec:tech-selection} chooses the runtime and \S\ref{sec:ipc-contract} defines that channel.
 
 \paragraph{AD-3. Two-phase validation: per-field while editing, structural at export.}
-The field checks (FR-3.1, FR-3.2) run on every keystroke, so they have to be fast. The whole-graph checks (FR-3.3, FR-3.4) are slower, and they only need to be triggred when the file is written. So validation is split in two. A quick check runs while the user edits a field, and a full check runs at export, each one pointing at the node or edge that failed (FR-3.5). \S\ref{sec:validation-engine} builds this mechanism.
+The field checks (FR-3.1, FR-3.2) run on every keystroke, so they have to be fast. The whole-graph checks (FR-3.3, FR-3.4) are slower, and they only need to be triggered when the file is written. So validation is split in two. A quick check runs while the user edits a field, and a full check runs at export, each one pointing at the node or edge that failed (FR-3.5). \S\ref{sec:validation-engine} builds this mechanism.
 
 \paragraph{AD-4. Offline availability of the catalog.}
 The catalog has to be available even when the fetch fails (FR-1.5, NFR-2.2). This calls for a fallback mechanism. The tool uses a fetch-first approach. It tries the network on every launch to get the latest catalog, and reads the local copy only when that fetch fails, so it never serves an old catalog while a fresh one is available. \S\ref{sec:catalog-ingestion} builds the pipeline.

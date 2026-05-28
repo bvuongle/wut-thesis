@@ -89,7 +89,7 @@ type HostApi = {
 \end{addmargin}
 
 \paragraph{The renderer side.}
-A lightweight preload script wraps each \texttt{HostApi} method in an \texttt{ipcRenderer.invoke} call and exposes the collection as \texttt{window.electronAPI} via the \texttt{contextBridge}. Renderer adapters then encapsulate \texttt{electronAPI} to implement the contract interfaces detailed in \S\ref{sec:hex-arch}, ensuring that UI components and application state never interact directly with IPC channel names.
+A lightweight preload script wraps each \texttt{HostApi} method in an \texttt{ipcRenderer.invoke} call and exposes the collection as \texttt{window.electronAPI} via the \texttt{contextBridge}. Renderer adapters then wrap \texttt{electronAPI} and implement the contract interfaces detailed in \S\ref{sec:hex-arch}, ensuring that UI components and application state never interact directly with IPC channel names.
 
 \paragraph{The main side.}
 \texttt{electron/main.ts} is the only file that registers IPC handlers. On \texttt{app.ready} it constructs the production adapters once and registers one handler per channel (Listing~\ref{lst:mainipc}). Constructing the adapters once keeps the catalog and the workspace as long-lived singletons.
@@ -127,7 +127,7 @@ Figure~\ref{fig:export-sequence} follows one contract call from the renderer to 
 \end{figure}
 
 \paragraph{Security boundary.}
-The browser window is created with \texttt{nodeIntegration: false} and \texttt{contextIsolation: true}. Renderer code cannot reach Node APIs directly; the only way into the main process is one of the six methods registered above. Adding a new capability is a two-file change: add the method to \texttt{HostApi} (and its outcome type), then register the corresponding handler in \texttt{main.ts}. Forgetting either side fails the build, which is the property NFR-6.1 was asking for.
+The browser window is created with \texttt{nodeIntegration: false} and \texttt{contextIsolation: true}~\cite{electronjs}. Renderer code cannot reach Node APIs directly, the isolation NFR-6.1 requires, and the only way into the main process is one of the six methods registered above. Adding a new capability is a two-file change: add the method to \texttt{HostApi} (and its outcome type), then register the corresponding handler in \texttt{main.ts}. The renderer adapter is typed against \texttt{HostApi}, so a call that drifts from the contract fails to compile. The preload bridge and the main-side registration use string-keyed channels, caught by the end-to-end tests rather than the compiler.
 
 \FloatBarrier
 
@@ -184,7 +184,9 @@ type CatalogComponent = z.infer<typeof CatalogComponentZ>
     \label{fig:catalog-sequence}
 \end{figure}
 \paragraph{}
-\texttt{loadOneRepo} triggers fetch from Artifactory. It lists every package reference, and downloads the export tarball, and reads \texttt{diff.metadata.json} from it through the catalog schema. On success, it uses \texttt{FsCatalogCache} to rewrite the repository's cache, under a directory keyed by the SHA-1 of the repository URL so the path is stable across formatting tweaks and carries no traversal characters. On failure, it also uses \texttt{FsCatalogCache} to read the cached slice, returning \textit{stale} when the slice is non-empty and \textit{failed} when it is empty. Finally, \texttt{mergeCatalogs} concatenates the documents.
+\texttt{loadOneRepo} triggers fetch from Artifactory. It lists every package reference, downloads the export tarball, and reads \texttt{diff.metadata.json} from it through the catalog schema, following the Conan v2 repository protocol~\cite{conan}. On success, it uses \texttt{FsCatalogCache} to rewrite the repository's cache, under a directory keyed by the SHA-1 of the repository URL so the path is stable across formatting tweaks and carries no traversal characters. On failure, it also uses \texttt{FsCatalogCache} to read the cached slice, returning \textit{stale} when the slice is non-empty and \textit{failed} when it is empty. Finally, \texttt{mergeCatalogs} concatenates the documents.
+
+\pagebreak
 
 \paragraph{}
 The renderer presents the merged catalog in a left-hand panel. The panel groups components and offers two search modes, by component name and by interface, alongside a per-source filter and a refresh button that re-runs \texttt{loadCatalog} on demand.
@@ -246,7 +248,7 @@ Beyond the graph, the store holds four lifecycle fields (Figure~\ref{fig:graphst
 \pagebreak
 
 \paragraph{Changes delegate to core functions.}
-Every change method in the store is a one-line dispatch: it reads the current graph, hands it to a function in the core that returns the next graph, and writes the next graph back with the dirty flag set. Listing~\ref{lst:store-mutation} shows the pattern, and the same shape repeats for every change. The benefit is that the core function is the only thing the unit tests need to exercise. The store action is so thin it would be tautological to test it.
+Every change method in the store is a one-line dispatch: it reads the current graph, hands it to a function in the core that returns the next graph, and writes the next graph back with the dirty flag set. Listing~\ref{lst:store-mutation} shows the pattern, and the same shape repeats for every change. The benefit is that the core function is the only thing the unit tests need to exercise.
 
 \begin{addmargin}[0mm]{0mm}
 \begin{lstlisting}[language=, caption={Store action pattern. \texttt{addNode} from the core is a pure function over the graph; the store action wraps it with the lifecycle update.}, label=lst:store-mutation, aboveskip=10pt]
@@ -292,7 +294,7 @@ The four interactions from \S\ref{sec:canvas-model} each live in their own hook 
 \texttt{useCanvasConnection} provides \texttt{isValidConnection} for the in-flight drag and \texttt{onConnect} for the release; both call \texttt{validateEdge} from \texttt{graphOperations.ts}, the single source of truth for what a valid edge is. An endpoint dropped on empty space deletes the edge rather than leaving it dangling.
 
 \paragraph{Edit hook and node sections.}
-An expanded node shows three sections (info, requirements, configuration), and a per-type control renderer feeds each edit to \texttt{graphStore.updateNodeConfig}, which runs the per-field validator (\S\ref{sec:validation-impl}).
+An expanded node shows three sections (info, requirements, configuration); a per-type control renderer applies the per-field input constraints (\S\ref{sec:validation-impl}) and feeds each edit to \texttt{graphStore.updateNodeConfig}.
 
 \begin{figure}[H]
     \centering
@@ -334,7 +336,7 @@ Export and import are two core functions over the same data model, with thin ada
         \caption{Import: \texttt{topologyToGraph}.}
         \label{fig:topology-functions-import}
     \end{subfigure}
-    \caption[The export and import function pipelines.]{The step sequence each function runs. (a) \texttt{graphToTopology} orders the graph and aligns each node's dependencies to its slots; (b) \texttt{topologyToGraph} parses the fileand rebuilds each node from the catalog.}
+    \caption[The export and import function pipelines.]{The step sequence each function runs. (a) \texttt{graphToTopology} orders the graph and aligns each node's dependencies to its slots; (b) \texttt{topologyToGraph} parses the file and rebuilds each node from the catalog.}
     \label{fig:topology-functions}
 \end{figure}
 
@@ -360,20 +362,20 @@ function depsFor(node, incomingEdges, nodeMap): TopologyDependency[] {
 \end{addmargin}
 
 \paragraph{Import.}
-\texttt{topologyToGraph} reverses the operation: it rebuilds each node (type lookup, \texttt{buildSlots}, config copy) and seeds positions from \texttt{layoutByLevels}, which places nodes by topological depth so the graph reads left to right. Node positions are not carried by the format, a deferred extension (\S\ref{sec:future-work}).
+\texttt{topologyToGraph} reverses the operation: it rebuilds each node (type lookup, \texttt{buildSlots}, config copy) and seeds positions from \texttt{layoutByLevels}, which places nodes by topological depth so the graph reads left to right as node positions are not carried by the format.
 
 \paragraph{}
-\texttt{topologyToGraph} still returns a node when the entry's type is missing from the catalog, stamped \texttt{unknownType: true} so the canvas renders it in a dashed red frame with a warning, the behaviour motivated in \S\ref{sec:topology-io}.
+\texttt{topologyToGraph} still returns a node when the entry's type is missing from the catalog. The canvas marks it unresolved at render time, finding no catalog entry for the node's type, and draws it in a dashed red frame with a warning, the behaviour motivated in \S\ref{sec:topology-io}.
 
 \FloatBarrier
 
 \subsection{Validation Engine}
 \label{sec:validation-impl}
 
-The two-phase design from \S\ref{sec:validation-engine} is implemented as two distinct entry points in \texttt{src/core/graph/}. The per-field path lives in \texttt{graphOperations.updateNodeConfig}, triggers on every configuration edit, and stamps an in-place \texttt{fieldErrors} map on the affected node. The structural path lives in \texttt{graphValidation.validateGraph}, triggers only at export time, and returns a flat result that the canvas uses to paint flagged nodes.
+The two-phase design from \S\ref{sec:validation-engine} splits across two layers. The per-field phase is enforced at the configuration controls as the integrator types, and \texttt{updateNodeConfig} merges the committed value into the node. The structural phase lives in \texttt{validateGraph} under \texttt{core/graph}, triggers only at export time, and returns a flat result that the canvas uses to paint flagged nodes.
 
 \paragraph{Per-field validation lives on the node.}
-The per-field path does not run \texttt{validateGraph}. \texttt{updateNodeConfig} accepts a partial config update, merges it into the node's \texttt{configData}, then runs each updated field through its schema's type, \texttt{min}, and \texttt{max}. Failures are stamped into a \texttt{fieldErrors} map on the node (keyed by field name, valued with an enum reason: \texttt{out\_of\_range}, \texttt{type\_mismatch}, \texttt{pattern\_failed}). The canvas renders the offending input with a red border and a tooltip drawn from the reason, and a later valid edit on the same field clears the entry without touching the other fields.
+The per-field phase is constraint-based rather than a validation pass. \texttt{ConfigFieldRenderer} picks a control by the field's declared type: a numeric field renders an HTML number input carrying the type's range and step (the signed or unsigned integer bounds, or \texttt{step=any} for \texttt{float} and \texttt{double}), tightened by any \texttt{min} or \texttt{max} the schema declares; a string field caps its length with \texttt{maxLength}; a boolean renders a switch. The control constrains the value at entry, and \texttt{updateNodeConfig} commits a numeric edit only when it parses as a number, so an out-of-type value never reaches \texttt{configData}. There is no separate per-field error state; the structural validator below is the gate that blocks export.
 
 \paragraph{Structural result shape.}
 \texttt{validateGraph} returns a \texttt{GraphValidationResult}: a \texttt{valid} boolean plus three lists, one per failure class (Listing~\ref{lst:validation-result}). The shape is flat and serialisable, which makes the failure data round-trip through the renderer toast and the flagged-node set.
@@ -408,10 +410,10 @@ type GraphValidationResult = {
 Cycles are found by a depth-first search that keeps a recursion stack. When an edge reaches a node already on the stack, the path back to it is a cycle, rebuilt from the parent pointers kept during the descent; the search is linear and reports one entry per distinct cycle. Export reuses Kahn's algorithm only for ordering, so the dedicated search is what yields the actual cycle members Kahn does not surface.
 
 \paragraph{}
-\texttt{detectUnfilledRequiredSlots} counts incoming edges per (node, slot) pair, then reports the non-array slots whose count is zero. Array slots are deliberately excluded; an empty array is valid (the C++ side accepts a zero-length variadic). The result names the offending instance identifier rather than the internal node id, so the surface toast can quote it verbatim.
+\texttt{detectUnfilledRequiredSlots} counts incoming edges per (node, slot) pair, then reports the non-array slots whose count is zero. Array slots are deliberately excluded; an empty array is valid (the C++ side accepts a zero-length variadic). The result names the offending instance identifier rather than the internal node id.
 
 \paragraph{}
-The connection-time validator in \S\ref{sec:canvas-impl} rejects an invalid edge before it enters the graph. \texttt{validateGraph} re-checks every edge with \texttt{isEdgeInvalid} at export time anyway, catching an edge that became invalid through some other path, such as a catalog refresh that changed a slot's interface. The cost is a linear scan; the benefit is that the loader downstream of \texttt{diff-forge} never sees a structurally invalid edge.
+The connection-time validator in \S\ref{sec:canvas-impl} rejects an invalid edge before it enters the graph. \texttt{validateGraph} re-checks every edge with \texttt{isEdgeInvalid} at export time anyway, catching an edge that became invalid through some other path, such as a catalog refresh that changed a slot's interface. The benefit is that the loader downstream of \texttt{diff-forge} never sees a structurally invalid edge.
 
 \paragraph{}
 On a failed export the command unions the node identifiers named by the three failure lists and hands the set to \texttt{graphStore.setFlaggedNodeIds}; the canvas paints those nodes. The set is pruned (never grown) on node removal and on \texttt{setGraph}, and a fresh export recomputes it. This ties the visual feedback to the last real validation decision without re-running cycle detection on every keystroke, which would put NFR-1.2 out of reach on a fifty-node graph.
@@ -459,15 +461,15 @@ On a failed export the command unions the node identifiers named by the three fa
 The topbar carries the workspace chip (clickable, opens the picker via the same command that the Ctrl+O hotkey runs), a Save Topology button (calls \texttt{exportTopology}, disabled when the workspace is invalid), a help icon (opens an About dialog), and a keyboard icon (opens the hotkey reference dialog).
 
 \paragraph{Dirty-aware workspace switch.}
-\texttt{topologyCommands.requestWorkspaceSwitch} reads \texttt{graphStore.dirty}. If false, it falls straight through to \texttt{performWorkspaceSwitch}. If true, it opens a confirmation dialog, and only switch workspace when having confirmation from user. \texttt{performWorkspaceSwitch} opens the native picker, and on success writes the new status to the store. The cwd change is observed by the topology effect, which re-runs and reconstitutes the new workspace's graph.
+\texttt{topologyCommands.requestWorkspaceSwitch} reads \texttt{graphStore.dirty}. If false, it falls straight through to \texttt{performWorkspaceSwitch}. If true, it opens a confirmation dialog, and only switches workspace once the user confirms. \texttt{performWorkspaceSwitch} opens the native picker, and on success writes the new status to the store. The cwd change is observed by the topology effect, which re-runs and reconstitutes the new workspace's graph.
 
 \paragraph{Notifications.}
-\texttt{notificationsStore} is a small Zustand store holding a list of toast records (id, severity, message, timeout). Free \texttt{notify.*} helpers push a record and schedule its removal, and \texttt{NotificationHost} renders the list as a stack of MUI \texttt{Snackbar}s in the bottom-right corner. Most user actions end in exactly one toast; the queue exists so a multi-step action does not lose the earlier message.
+\texttt{notificationsStore} is a small Zustand store holding a list of toast records (id, severity, message, timeout). Free \texttt{notify.*} helpers push a record and schedule its removal, and \texttt{NotificationHost} renders the list as a stack of Material UI (MUI) \texttt{Snackbar}s in the bottom-right corner. Most user actions end in exactly one toast; the queue exists so a multi-step action does not lose the earlier message.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.6\linewidth,keepaspectratio]{export-toast.png}
-    \caption[Export feedback toast.]{The toast shown after an success export attempt.}
+    \caption[Export feedback toast.]{The toast shown after n success export.}
     \label{fig:export-toast}
 \end{figure}
 
