@@ -1,0 +1,46 @@
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, rounded corners=2pt, minimum height=8mm, text width=30mm, align=center},
+    fe/.style={box, fill=blue!10},
+    be/.style={box, fill=orange!12},
+    ext/.style={box, fill=violet!12},
+    env/.style={box, fill=gray!12, text width=38mm},
+    cache/.style={box, fill=yellow!18},
+    dec/.style={diamond, draw, aspect=2.2, inner sep=1pt, fill=orange!12, font=\scriptsize, align=center},
+    arr/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed}
+]
+\newcommand{\sw}[1]{\tikz[baseline=-0.5ex]\node[draw, minimum width=3.5mm, minimum height=2.5mm, inner sep=0pt, fill=#1]{};}
+
+\node[env] (envv) {\texttt{ARTIFACTORY\_REPOS}\\\texttt{ARTIFACTORY\_TOKEN}};
+\node[be, below=12mm of envv] (handler) {Catalog request handler};
+\node[be, below=6mm of handler] (source)  {Catalog source:\\fan-out per repository};
+\node[dec, below=8mm of source] (dec) {fresh\\fetch ok?};
+\node[be,    below=16mm of dec, xshift=-26mm] (ok)       {use fresh data,\\write cache};
+\node[cache, below=16mm of dec, xshift=26mm]  (fallback) {read cache slice\\(mark stale)};
+\node[be, below=38mm of dec] (merge)   {merge slices};
+\node[be, below=6mm of merge] (outcome) {outcome};
+\node[ext, right=16mm of source] (rest) {Artifactory, Conan v2 REST:\\search, revisions,\\export tarball, metadata};
+\node[cache, right=16mm of fallback] (store) {per-component\\on-disk cache};
+\node[fe, left=20mm of handler] (boot)  {Editor boot / Refresh};
+\node[fe, left=20mm of outcome] (panel) {Catalog panel\\(ready, or stale / error notice)};
+
+\draw[arr] (boot) -- (handler);
+\draw[arr] (envv) -- (handler);
+\draw[arr] (handler) -- (source);
+\draw[arr] (source) -- node[above, font=\scriptsize]{fetch} (rest);
+\draw[arr] (source) -- (dec);
+\draw[arr] (dec) -- node[near start, left, font=\scriptsize]{yes} (ok);
+\draw[arr] (dec) -- node[near start, right, font=\scriptsize]{no} (fallback);
+\draw[arr] (fallback) -- (store);
+\draw[arr] (ok)       |- (merge);
+\draw[arr] (fallback) |- (merge);
+\draw[arr] (merge) -- (outcome);
+\draw[ret] (outcome) -- node[above, font=\scriptsize]{IPC return} (panel);
+
+\node[draw, rounded corners=2pt, anchor=north west, font=\scriptsize, align=left, inner sep=2mm]
+  at ($(panel.south west)+(0,-8mm)$) {
+  \sw{blue!10}\,frontend (renderer) \quad \sw{orange!12}\,backend (main process) \quad \sw{violet!12}\,external API \\[2pt]
+  \sw{gray!12}\,system env \quad \sw{yellow!18}\,on-disk cache
+  };
+\end{tikzpicture}

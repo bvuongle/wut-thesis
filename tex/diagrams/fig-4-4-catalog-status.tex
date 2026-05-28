@@ -1,0 +1,25 @@
+\begin{tikzpicture}[
+    node distance=5mm and 12mm,
+    box/.style={draw, rounded corners=2pt, minimum height=12mm, text width=42mm, align=center, font=\small},
+    ready/.style={box, fill=green!15},
+    partial/.style={box, fill=yellow!15},
+    error/.style={box, fill=red!15},
+    unconfigured/.style={box, fill=gray!15}
+]
+\node[font=\bfseries] (title) {Catalog load outcome};
+
+\node[ready, below left=8mm and 10mm of title] (ready)
+    {\textbf{status: 'ready'}\\\scriptsize\ttfamily catalog\\\scriptsize\ttfamily repos[]};
+
+\node[partial, right=of ready] (partial)
+    {\textbf{status: 'partial'}\\\scriptsize\ttfamily catalog\\\scriptsize\ttfamily repos[]\\\scriptsize\ttfamily message};
+
+\node[unconfigured, below=of ready] (unconfigured)
+    {\textbf{status: 'unconfigured'}\\\scriptsize\ttfamily missing[]};
+
+\node[error, below=of partial] (error)
+    {\textbf{status: 'error'}\\\scriptsize\ttfamily message\\\scriptsize\ttfamily repos[]};
+
+\node[font=\scriptsize\itshape, below=8mm of unconfigured, xshift=24mm, text width=80mm, align=center]
+    {The \texttt{status} field is the discriminant; \texttt{catalog} is present only in \texttt{ready} and \texttt{partial}; \texttt{message} is present in \texttt{partial} and \texttt{error}; \texttt{missing} is present only in \texttt{unconfigured}.};
+\end{tikzpicture}

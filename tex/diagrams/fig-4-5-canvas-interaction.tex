@@ -1,0 +1,24 @@
+\begin{tikzpicture}[
+    node distance=7mm and 16mm,
+    box/.style={draw, rounded corners=2pt, minimum height=10mm, text width=36mm, align=center, font=\small, fill=white},
+    dec/.style={diamond, draw, aspect=2, inner sep=1pt, fill=white, font=\scriptsize, align=center},
+    arr/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    note/.style={font=\scriptsize\itshape, align=center}
+]
+\node[box] (event) {Canvas event\\\scriptsize drop $\cdot$ connect $\cdot$ edit $\cdot$ delete};
+\node[box, below=of event] (handler) {Interaction handler};
+\node[dec, below=8mm of handler] (dec) {valid?};
+\node[box, below=10mm of dec] (commit) {State commit\\\scriptsize (apply mutation, mark dirty)};
+\node[box, below=of commit] (render) {Re-render canvas};
+\node[box, right=22mm of dec] (reject) {Rejected,\\no change};
+
+\draw[arr] (event) -- (handler);
+\draw[arr] (handler) -- node[right, font=\scriptsize]{candidate change} (dec);
+\draw[arr] (dec) -- node[left, font=\scriptsize]{yes} (commit);
+\draw[arr] (dec) -- node[above, font=\scriptsize]{no} (reject);
+\draw[arr] (commit) -- (render);
+\draw[ret] (render.east) -| ($(reject.east)+(8mm,0)$) |- (event.east);
+
+\node[note, left=14mm of dec, text width=30mm] {Core logic decision: \\ ports that edge can connect to are highlighted and the rest are dimmed, before release};
+\end{tikzpicture}

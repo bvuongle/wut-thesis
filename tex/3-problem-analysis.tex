@@ -47,7 +47,7 @@ The integrator's interaction with \textit{diff-forge} breaks down into six use c
     \item When the graph is ready, the actor exports it.
     \item The tool validates the graph structure at export time, refusing to write the topology file until every error is resolved.
 \end{enumerate}
-\noindent\textbf{Postcondition:} a valid topology file is written into the workspace directory, named base on that directory (a workspace at \texttt{/dev/my-project} produces \texttt{my-project.forge.json}), and the existing build pipeline consumes it without modification.
+\noindent\textbf{Postcondition:} a valid topology file is written into the workspace directory, named based on that directory (a workspace at \texttt{/user/my-project} produces \texttt{my-project.forge.json}), and the existing build pipeline consumes it without modification.
 
 \paragraph{UC3. Resume work on an existing topology.}
 \textbf{Actor:} the integrator. 
@@ -110,7 +110,7 @@ categories, each tied to a project objective from \S1.3 or to the workspace life
     \item[FR-1.2.] The system present each component's type name, version, source repository in a catalog panel.
     \item[FR-1.3.] The system let the user filter the catalog by component name and by interface type.
     \item[FR-1.4.] The system let the user trigger a catalog refresh on demand.
-    \item[FR-1.5.] The system cache the most recent successful fetch on disk and fall back to the cache when a fresh fetch fails, marking the resulting state as stale.
+    \item[FR-1.5.] The system remain usable after a failed fetch by reusing the most recent successfully fetched catalog, and mark that catalog as stale.
 \end{reqlist}
 
 \paragraph{FR-2. Graph composition.}
@@ -119,7 +119,7 @@ categories, each tied to a project objective from \S1.3 or to the workspace life
     \item[FR-2.2.] The system let the user wire two nodes by drawing an edge from a provider port on one node to a slot port on another.
     \item[FR-2.3.] The system reject an edge whose provider interface does not match the slot's required type.
     \item[FR-2.4.] The system expose each node's configuration fields for inline editing (with controls appropriate to each field's declared type) and for direct JSON editing. It should also populate default values for any field that declares them in the metadata.
-    \item[FR-2.5.] The system let the user pan, zoom, multi-select, and delete nodes and edges on the canvas. It also allow user to expand or collapse all nodes.
+    \item[FR-2.5.] The system let the user pan, zoom, multi-select, and delete nodes and edges on the canvas. It also lets user expand or collapse all nodes.
 \end{reqlist}
 
 \paragraph{FR-3. Validation.}
@@ -162,7 +162,7 @@ The functional requirements describe what the system does. The non-functional re
 \paragraph{NFR-2. Reliability.}
 \begin{reqlist}
     \item[NFR-2.1.] The system does not discard unsaved user work without explicit confirmation.
-    \item[NFR-2.2.] The system continue to support authoring when the catalog server becomes unreachable mid-session, falling back to the most recent cached catalog.
+    \item[NFR-2.2.] The system continue to support authoring when the catalog server becomes unreachable mid-session.
     \item[NFR-2.3.] The exported topology file is accepted by the existing \textit{diff} loader without changes to the loader, the build pipeline, or the components being instantiated.
 \end{reqlist}
 
@@ -175,9 +175,9 @@ The functional requirements describe what the system does. The non-functional re
 
 \paragraph{NFR-4. Maintainability.}
 \begin{reqlist}
-    \item[NFR-4.1.] core logic (graph operations, validation, topology I/O, catalog merging) live in framework-free TypeScript modules testable without a DOM, an Electron process, or a network.
-    \item[NFR-4.2.] Code that depends on external systems (Artifactory REST, the filesystem, IPC) sit behind a abstract interface and be swappable by an in-memory test service.
-    \item[NFR-4.3.] The codebase pass strict TypeScript, ESLint, and the unit and end-to-end test suites in continuous integration before any change is merged.
+    \item[NFR-4.1.] The core logic (graph operations, validation, topology I/O, catalog merging) be verifiable in isolation, without launching the full application.
+    \item[NFR-4.2.] Code that depends on external systems (the catalog server, the filesystem) be replaceable by a test substitute without changing the code that uses it.
+    \item[NFR-4.3.] Every change pass the automated quality gates (static analysis, type checking, and the test suites) in continuous integration before it is merged.
 \end{reqlist}
 
 \paragraph{NFR-5. Portability.}
@@ -188,29 +188,29 @@ The functional requirements describe what the system does. The non-functional re
 
 \paragraph{NFR-6. Security.}
 \begin{reqlist}
-    \item[NFR-6.1.] The renderer process shall communicate with the main process exclusively through a typed, allow-listed IPC contract. Node.js APIs shall not be exposed to renderer code.
-    \item[NFR-6.2.] The application shall not transmit catalog data, topology files, or workspace paths to any destination beyond the configured Artifactory URLs.
+    \item[NFR-6.1.] The renderer process does not hold direct access to the filesystem, the network, or other operating-system interfaces.
+    \item[NFR-6.2.] The application does not transmit catalog data, topology files, or workspace paths to any destination beyond the configured Artifactory URLs.
 \end{reqlist}
 
 \subsection{Architecture Drivers}
 \label{sec:arch-drivers}
 
-Architecture drivers are the requirements that steer system design. Each driver below cites the requirements it follows from and forward-references the design section that responds to it.
+Some of the requirements above are important enough to force a design decision. Those are the architecture drivers, and this section lists them. 
 
-\paragraph{AD-1. Hexagonal separation between core logic and side-effectful adapters.}
-The core parts of the system must run without a DOM, without Electron, and without network access (NFR-4.1). Everything that interacts the external system (Artifactory REST, filesystem, IPC) must sit behind a abstract interface. This driver shapes the codebase layout in \S\ref{sec:project-structure} and is the reason most validation, catalog, and topology logic can be unit-tested without depend on the framework.
+\paragraph{AD-1. Separation between core logic and side-effectful adapters.}
+The core logic has to be testable on its own (NFR-4.1), and the parts that reach outside systems have to be replaceable in a test (NFR-4.2). So the design puts a boundary between the two. The core depends only on interfaces, and the real implementations plug into it from outside. \S\ref{sec:hex-arch} shows the layout.
 
 \paragraph{AD-2. Cross-platform desktop with isolated processes and a typed bridge.}
-The application must run on macOS, Windows, and Linux from a single codebase (NFR-5.1), and the renderer must reach the filesystem and the network only through a typed allow-listed IPC contract (NFR-6.1). This driver makes Electron's two-process architecture (\S\ref{sec:cross-platform-frameworks}) load-bearing.
+The tool has to run on macOS, Windows, and Linux from one codebase (NFR-5.1), and the part that draws the interface must not reach the filesystem or the network on its own (NFR-6.1). Both point to the same kind of runtime, a desktop shell that keeps the interface in one process and the system access in another, with a typed channel between them. \S\ref{sec:tech-selection} chooses the runtime and \S\ref{sec:ipc-contract} defines that channel.
 
 \paragraph{AD-3. Two-phase validation: per-field while editing, structural at export.}
-Per-field validation runs as the user types and flags the offending field in place (FR-3.1, FR-3.2, FR-3.5). Structural validation runs once at export, refuses the write on failure, and points at every offending node or edge (FR-3.3, FR-3.4, FR-3.5). The two phases live in different layers and are triggered by different events. 
+The field checks (FR-3.1, FR-3.2) run on every keystroke, so they have to be fast. The whole-graph checks (FR-3.3, FR-3.4) are slower, and they only need to be triggred when the file is written. So validation is split in two. A quick check runs while the user edits a field, and a full check runs at export, each one pointing at the node or edge that failed (FR-3.5). \S\ref{sec:validation-engine} builds this mechanism.
 
 \paragraph{AD-4. Offline availability of the catalog.}
-A successful catalog fetch is persisted to local storage (FR-1.5). On each launch the tool fetches from the configured repositories first, while the cache is read back only when a fresh fetch fails, so authoring continues against the most recent available catalog with a stale-state warning (NFR-2.2).
+The catalog has to be available even when the fetch fails (FR-1.5, NFR-2.2). This calls for a fallback mechanism. The tool uses a fetch-first approach. It tries the network on every launch to get the latest catalog, and reads the local copy only when that fetch fails, so it never serves an old catalog while a fresh one is available. \S\ref{sec:catalog-ingestion} builds the pipeline.
 
-\paragraph{AD-5. Round-trip compatibility with the existing diff loader.}
-The exported file must be accepted by the existing \textit{diff} loader without changes to the loader or to the build pipeline (FR-4.1, NFR-2.3), and an exported file re-opened by \textit{diff-forge} must produce a graph with exactly the same nodes, edges, and configuration (FR-4.2). Topological order at export time is a hard constraint.
+\paragraph{AD-5. Round-trip compatibility.}
+\textit{diff-forge} does not own its file format. The existing \textit{diff} loader has to read the output as it is (FR-4.1, NFR-2.3), and a file re-opened in the tool has to rebuild the same graph (FR-4.2). So export and import are written as exact inverses of each other, and the order of the entries, with each component placed after the ones it depends on, is something the tool computes rather than a matter of presentation. \S\ref{sec:topology-io} builds both directions.
 
 \paragraph{AD-6. Workspace as a first-class lifecycle, with dirty-aware switching.}
-The launch directory may be valid, invalid, or chosen later through a picker (FR-5.1). The active workspace may change at any point during a session (FR-5.2). The system must not discard unsaved work silently (FR-5.3, NFR-2.1). These three forces make the workspace a small state machine rather than an implicit constant.
+The workspace can be set at launch, picked later from a dialog, or swapped in the middle of a session (FR-5.1, FR-5.2). Any edit to the graph marks the workspace as having unsaved changes. If the integrator switches workspace while that mark is set, the tool asks to confirm before it discards the changes (FR-5.3, NFR-2.1), and a successful export clears the mark. The tool tracks this as a small workspace state machine rather than a fixed setting. \S\ref{sec:canvas-model} and \S\ref{sec:workspace-ui} build it.
