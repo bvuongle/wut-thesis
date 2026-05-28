@@ -1,0 +1,27 @@
+\begin{tikzpicture}[
+    font=\small,
+    iface/.style={draw, rounded corners=2pt, fill=yellow!15, text width=46mm, align=center},
+    impl/.style={draw, fill=orange!12, text width=40mm, align=center},
+    test/.style={draw, fill=blue!8, text width=40mm, align=center},
+    real/.style={-{Triangle[open]}, dashed, thick},
+    agg/.style={{Diamond[open]}-{Stealth}, thick},
+    lbl/.style={font=\scriptsize\itshape}
+]
+% CatalogSource contract and its implementations
+\node[iface] (cs) {$\langle\langle$contract$\rangle\rangle$ \textbf{CatalogSource}\\[1pt]\scriptsize loadCatalog(): CatalogLoadOutcome};
+\node[impl, below=14mm of cs, xshift=-46mm] (file) {FileCatalogSource\\\scriptsize reads a local JSON file};
+\node[impl, below=14mm of cs] (ipc) {IpcCatalogSource\\\scriptsize forwards over IPC};
+\node[impl, below=14mm of cs, xshift=46mm] (art) {ArtifactoryCatalogSource\\\scriptsize Conan v2 REST};
+\draw[real] (file) -- (cs);
+\draw[real] (ipc) -- (cs);
+\draw[real] (art) -- (cs);
+
+% CatalogCache contract injected into the Artifactory source
+\node[iface, right=26mm of art] (cc) {$\langle\langle$contract$\rangle\rangle$ \textbf{CatalogCache}\\[1pt]\scriptsize writeCache / readCache / clearRepo};
+\node[impl, below=10mm of cc] (fs) {FsCatalogCache\\\scriptsize per-component files};
+\node[test, below=7mm of fs] (mem) {in-memory cache\\\scriptsize test double};
+\draw[real] (fs) -- (cc);
+\draw[real] (mem) -- (cc);
+\draw[agg] (art) -- node[lbl, above]{injected} (cc);
+
+\end{tikzpicture}

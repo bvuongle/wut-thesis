@@ -1,0 +1,29 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    fn/.style={draw, rounded corners=2pt, fill=green!12, text width=40mm, align=center, minimum height=8mm},
+    caller/.style={draw, rounded corners=2pt, fill=blue!10, text width=34mm, align=center, minimum height=8mm},
+    data/.style={draw, rectangle split, rectangle split parts=2, fill=yellow!14, text width=44mm, align=left},
+    ui/.style={draw, rounded corners=2pt, fill=orange!14, text width=40mm, align=center, minimum height=8mm},
+    arr/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    lbl/.style={font=\scriptsize\itshape, align=center}
+]
+\node[caller] (export) {exportTopology (command)};
+\node[fn, below=8mm of export] (vg) {validateGraph};
+\node[fn, below=11mm of vg, xshift=-46mm] (cyc) {detectCycles};
+\node[fn, below=11mm of vg] (unf) {detectUnfilled-\\RequiredSlots};
+\node[fn, below=11mm of vg, xshift=46mm] (edge) {isEdgeInvalid\\(per edge)};
+\node[data, below=11mm of unf] (res) {\textbf{GraphValidationResult}
+    \nodepart{two} valid: bool\\ cycles, unfilled, invalidEdges};
+\node[ui, below=9mm of res] (flag) {flaggedNodeIds: red node borders};
+
+\draw[arr] (export) -- node[lbl, right]{at export} (vg);
+\draw[arr] (vg) -- (cyc);
+\draw[arr] (vg) -- (unf);
+\draw[arr] (vg) -- (edge);
+\draw[arr] (cyc) -- (res.north west);
+\draw[arr] (unf) -- (res.north);
+\draw[arr] (edge) -- (res.north east);
+\draw[ret] (res.east) -| node[lbl, right, pos=0.25]{valid: write file;\\ invalid: refuse} ($(edge.east)+(8mm,0)$) |- (export.east);
+\draw[arr] (res) -- node[lbl, right]{on failure} (flag);
+\end{tikzpicture}

@@ -1,0 +1,26 @@
+\begin{tikzpicture}[
+    font=\small,
+    stores/.style={draw, rounded corners=3pt, fill=orange!14, text width=52mm, align=center, minimum height=18mm},
+    actor/.style={draw, rounded corners=2pt, text width=34mm, align=center, minimum height=10mm},
+    adapter/.style={actor, fill=blue!10},
+    view/.style={actor, fill=blue!10},
+    orch/.style={actor, fill=green!12},
+    subs/.style={actor, fill=yellow!16},
+    arr/.style={-{Stealth}, thick},
+    lbl/.style={font=\scriptsize, align=center}
+]
+\node[stores] (stores) {\textbf{Zustand stores}\\[3pt]\scriptsize graphStore\\ catalogStore $\cdot$ workspaceStore\\ uiStore $\cdot$ notificationsStore};
+
+\node[adapter, left=20mm of stores] (adapters) {Adapters\\\scriptsize catalog source, workspace};
+\node[view, right=20mm of stores] (view) {Components\\\scriptsize the view};
+\node[orch, above=12mm of stores] (cmd) {topologyCommands\\\scriptsize orchestrator};
+\node[subs, below=12mm of stores] (sub) {stateSubscriptions};
+
+\draw[arr] (adapters.east) -- node[lbl, above]{write\\outcomes} (stores.west);
+\draw[arr] (stores.east) -- node[lbl, above]{select\\slices} (view.west);
+\draw[arr] (cmd) -- node[lbl, right]{read graph + workspace,\\ write notifications} (stores);
+% Forward and return between stores and subscriptions run as two parallel
+% vertical lanes on the lower edge, so they do not overlap.
+\draw[arr] ($(stores.south)+(6mm,0)$) -- node[lbl, right]{graph change} ($(sub.north)+(6mm,0)$);
+\draw[arr] ($(sub.north)+(-6mm,0)$) -- node[lbl, left, align=center]{prune stale\\ selection /\\ expansion} ($(stores.south)+(-6mm,0)$);
+\end{tikzpicture}

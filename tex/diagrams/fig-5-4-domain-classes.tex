@@ -1,0 +1,31 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    class/.style={draw, rectangle split, rectangle split parts=2, fill=blue!8, text width=38mm, align=left},
+    tcls/.style={draw, rectangle split, rectangle split parts=2, fill=orange!10, text width=38mm, align=left},
+    comp/.style={{Diamond[open]}-, thick},
+    trans/.style={-{Stealth}, dashed, thick},
+    lbl/.style={font=\scriptsize\itshape, align=center}
+]
+\node[class] (graph) {\textbf{Graph}
+    \nodepart{two} nodes: GraphNode[]\\ edges: GraphEdge[]};
+\node[class, below left=14mm and -14mm of graph] (gnode) {\textbf{GraphNode}
+    \nodepart{two} id, instanceId\\ componentType, version\\ position, configData\\ slots: Slot[]};
+\node[class, below right=14mm and -14mm of graph] (gedge) {\textbf{GraphEdge}
+    \nodepart{two} id\\ sourceNodeId, sourceSlot\\ targetNodeId, targetSlot};
+\node[class, below=12mm of gnode] (slot) {\textbf{Slot}
+    \nodepart{two} name, type\\ direction, isArray};
+
+\node[tcls, right=42mm of graph] (topo) {\textbf{Topology}
+    \nodepart{two} entries: TopologyEntry[]};
+\node[tcls, below=16mm of topo] (entry) {\textbf{TopologyEntry}
+    \nodepart{two} type, id\\ dependencies:\\ \quad(string $|$ string[])[]\\ config};
+
+\draw[comp] (graph) -- (gnode);
+\draw[comp] (graph) -- (gedge);
+\draw[comp] (gnode) -- (slot);
+\draw[comp] (topo) -- (entry);
+
+\draw[trans] ($(graph.east)+(0,3mm)$) -- node[lbl, above]{graphToTopology\\(Kahn order)} ($(topo.west)+(0,3mm)$);
+\draw[trans] ($(topo.west)+(0,-3mm)$) -- node[lbl, below]{topologyToGraph\\(+ auto-layout)} ($(graph.east)+(0,-3mm)$);
+
+\end{tikzpicture}

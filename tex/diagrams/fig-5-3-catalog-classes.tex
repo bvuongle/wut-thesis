@@ -1,0 +1,24 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    class/.style={draw, rectangle split, rectangle split parts=2, fill=green!8, text width=34mm, align=left},
+    wire/.style={draw, rectangle split, rectangle split parts=2, fill=violet!8, text width=32mm, align=left},
+    gnode/.style={draw, rectangle split, rectangle split parts=2, fill=blue!8, text width=32mm, align=left},
+    dep/.style={-{Stealth}, dashed, thick},
+    comp/.style={{Diamond[open]}-{Stealth}, thick},
+    lbl/.style={font=\scriptsize\itshape, align=center}
+]
+\node[wire] (frag) {\textbf{ComponentFragment}
+    \nodepart{two} type, version\\ implements[], requires[]\\ config \quad \textit{(Conan)}};
+\node[class, right=30mm of frag] (comp) {\textbf{CatalogComponent}
+    \nodepart{two} type, version, source\\ implements: string[]\\ requires: \{slot, type, isArray\}\\ config: field map};
+\node[gnode, right=30mm of comp] (gn) {\textbf{GraphNode}
+    \nodepart{two} id, instanceId\\ position, configData\\ slots: Slot[]};
+\node[class, below=14mm of comp] (slot) {\textbf{Slot}
+    \nodepart{two} name, type\\ direction: in $|$ out\\ isArray};
+
+\draw[dep] (frag) -- node[lbl, above]{fragmentTo-\\Component} (comp);
+\draw[dep] (comp) -- node[lbl, above]{createNode-\\FromCatalog} (gn);
+\draw[dep] (comp) -- node[lbl, right]{buildSlots} (slot);
+\draw[comp] (gn.south) |- (slot.east);
+
+\end{tikzpicture}
