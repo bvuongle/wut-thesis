@@ -1,0 +1,216 @@
+\clearpage
+\section{Problem Analysis}
+
+This chapter analyzes the problem from the user's perspective and defines a formal set of requirements and constraints. The analysis begins by identifying the specific personas the tool serves (\S\ref{sec:personas}) and the use cases that drive the user workflow (\S\ref{sec:use-cases}). These are then expanded into testable functional (\S\ref{sec:frs}) and non-functional (\S\ref{sec:nfrs}) requirements. Finally, it identifies the core architectural drivers that determine the design choices presented later on.
+
+\subsection{Personas}
+\label{sec:personas}
+
+The user base of \textit{diff-forge} is specialized and restricted in scope. As a desktop tool launched from a project directory to edit a local configuration, the application serves a single developer per session within a specific workspace. While multiple roles interact with the \textit{diff} framework, only one role is a direct user of the \textit{diff-forge} interface.
+
+\paragraph{The embedded integrator.}
+The integrator assembles a product variant by composing \textit{diff} components into a topology. They are familiar with the catalog of modules available to their project and understand \textit{diff} framework's runtime mechanics. Their working environment is a UNIX-like terminal in a project folder that already targets the \textit{diff} build system, with Conan-published modules accessible through configured Artifactory repositories.
+
+\paragraph{The component publisher.}
+The component publisher is responsible for maintaining individual Conan recipes and their metadata file (\S\ref{sec:module-distribution}). Their interaction with the tool is limited to the metadata schema they publish alongside each module version. Because the \textit{diff-forge} ingestion pipeline (\S\ref{sec:catalog-ingestion}) relies on this metadata to populate the catalog, the publisher must strictly follow the metadata contract.
+
+\paragraph{Non-personas.}
+It is also necessary to identify stakeholders who are explicitly excluded from the tool's design scope. These include the end user of the embedded device, the automated build server, and the source-control reviewer. Because \textit{diff-forge} exports standard JSON that is compatible with manually authored files, both the build server and the reviewer process the tool's output through their existing code paths. \textit{diff-forge} remains transparent to these downstream processes, sitting between the module publisher and the final system assembly.
+
+\subsection{Use Cases}
+\label{sec:use-cases}
+
+The integrator's interaction with \textit{diff-forge} breaks down into six use cases. Each is specified below by its actor, its precondition, the main flow, and the postcondition that holds once the flow completes.
+
+\paragraph{UC1. Start from a valid workspace.}
+\textbf{Actor:} the integrator. 
+
+\noindent\textbf{Precondition:} the integrator starts the application, either from a terminal in a project folder or a desktop icon.
+\begin{enumerate}
+    \item The actor launches \textit{diff-forge}. When it starts from a terminal inside a project folder, the tool adopts that directory as the workspace. When it starts from an unsuitable location such as the home or root directory, the tool opens a welcome screen and lets the actor pick a workspace directory.
+    \item The tool reads the configured Artifactory repository URLs and access token from the environment.
+    \item The tool fetches the component catalog from the configured repositories. If the fetch fails, it falls back to the most recent catalog cached on disk. If both the fetch and the cache fail, notifies the actor.
+    \item The catalog populates the catalog panel, and any existing \texttt{.forge.json} topology file in the workspace is loaded onto the canvas.
+\end{enumerate}
+\noindent\textbf{Postcondition:} the editor is ready to compose or edit a topology in the chosen workspace.
+
+\paragraph{UC2. Compose a topology.}
+\textbf{Actor:} the integrator. 
+
+\noindent\textbf{Precondition:} the editor is open on a workspace with a loaded catalog (UC1), and the canvas is empty or holds a work in progress.
+\begin{enumerate}
+    \item The actor searches the catalog by component name or by interface. A search by interface returns two groups: the components that implement the interface, and the components that require it.
+    \item The actor drags a catalog tile onto the canvas to create a node.
+    \item The actor drags from one node's port to another's port to wire a dependency. The tool prevents invalid connections by rejecting edges that connect incompatible interfaces.
+    \item The actor expands a node and edits its configuration, either through the generated form fields or by pasting a JSON configuration directly.
+    \item The tool validates the configuration as the actor unfocuses each field and flags any errors in place.
+    \item When the graph is ready, the actor exports it.
+    \item The tool validates the graph structure at export time, refusing to write the topology file until every error is resolved.
+\end{enumerate}
+\noindent\textbf{Postcondition:} a valid topology file is written into the workspace directory, named based on that directory (a workspace at \texttt{/user/my-project} produces \texttt{my-project.forge.json}), and the existing build pipeline consumes it without modification.
+
+\paragraph{UC3. Resume work on an existing topology.}
+\textbf{Actor:} the integrator. 
+
+\noindent\textbf{Precondition:} the workspace directory already contains its \texttt{.forge.json} topology file, detected on launch (UC1).
+\begin{enumerate}
+    \item The tool reads the topology file and checks it for corruption before using it.
+    \item From the topology entries, the tool builds an in-memory directed acyclic graph.
+    \item The tool lays out that graph and renders it on the canvas.
+    \item The actor changes a configuration value, adds or removes a node or edge, and exports.
+\end{enumerate}
+\noindent\textbf{Postcondition:} the on-disk topology file is overwritten in place and reflects the edited graph.
+
+\paragraph{UC4. Switch workspace mid-session.}
+\textbf{Actor:} the integrator. 
+
+\noindent\textbf{Precondition:} the tool is open on a workspace, and the current graph may hold unsaved changes.
+\begin{enumerate}
+    \item The actor requests a workspace switch, through a hotkey or by clicking the workspace label in the topbar.
+    \item If the current graph has unsaved changes, the tool asks the integrator to confirm before discarding them.
+    \item After confirmation, the integrator picks a different folder.
+    \item The tool rebinds to the new folder and either loads its topology or starts blank.
+\end{enumerate}
+\noindent\textbf{Postcondition:} the tool is bound to the new workspace, and no unsaved work is discarded without confirmation.
+
+\paragraph{UC5. Refresh the module catalog.}
+\textbf{Actor:} the integrator. 
+
+\noindent\textbf{Precondition:} the tool is open with a loaded catalog.
+\begin{enumerate}
+    \item The actor triggers a catalog refresh from the catalog panel.
+    \item The tool re-queries the configured Artifactory repositories.
+    \item On success, the tool replaces the in-memory catalog and updates the on-disk cache, while keeping the canvas state intact.
+    \item The tool notifies the integrator of the outcome. If only some repositories respond, it updates with the available subset and reports the ones that failed.
+    \item If the fetch fails but a cache is available, the tool falls back to the cache and marks the catalog state as stale.
+\end{enumerate}
+\noindent\textbf{Postcondition:} the catalog panel reflects the latest available published metadata, and the canvas is unchanged.
+
+\paragraph{UC6. Recover from infrastructure failure.}
+\textbf{Actor:} the integrator. 
+
+\noindent\textbf{Precondition:} an infrastructure problem occurs during launch or workspace selection.
+\begin{enumerate}
+    \item If the picked folder turns out to be invalid, for example with no catalog sibling or in a sandbox-restricted location, the welcome screen reappears with the reason and the integrator picks again.
+    \item If Artifactory is unreachable on a cold launch with no cached catalog, the tool surfaces an explicit error and offers a retry. When a prior fetch has cached the catalog on disk, the tool falls back to that cache and continues with a partial-state warning.
+\end{enumerate}
+\noindent\textbf{Postcondition:} the integrator is presented with a usable fallback state or actionable feedback, and no work is silently lost.
+
+\subsection{Functional Requirements}
+\label{sec:frs}
+
+The use cases in \S\ref{sec:use-cases} expand into a set of testable functional requirements (FRs). The FRs group into five 
+categories, each tied to a project objective from \S1.3 or to the workspace lifecycle the integrator works within.
+
+\pagebreak
+
+\paragraph{FR-1. Catalog ingestion and browsing.}
+\begin{reqlist}
+    \item[FR-1.1.] The system fetch component metadata from Artifactory repositories configured through environment variables.
+    \item[FR-1.2.] The system present each component's type name, version, source repository in a catalog panel.
+    \item[FR-1.3.] The system let the user filter the catalog by component name and by interface type.
+    \item[FR-1.4.] The system let the user trigger a catalog refresh on demand.
+    \item[FR-1.5.] The system remain usable after a failed fetch by reusing the most recent successfully fetched catalog, and mark that catalog as stale.
+\end{reqlist}
+
+\paragraph{FR-2. Graph composition.}
+\begin{reqlist}
+    \item[FR-2.1.] The system create a new node when the user drags a catalog entry onto the canvas, assigning a unique instance identifier, combining the component name with a numeric suffix.
+    \item[FR-2.2.] The system let the user wire two nodes by drawing an edge from a provider port on one node to a slot port on another.
+    \item[FR-2.3.] The system reject an edge whose provider interface does not match the slot's required type.
+    \item[FR-2.4.] The system expose each node's configuration fields for inline editing (with controls appropriate to each field's declared type) and for direct JSON editing. It should also populate default values for any field that declares them in the metadata.
+    \item[FR-2.5.] The system let the user pan, zoom, multi-select, and delete nodes and edges on the canvas. It also lets user expand or collapse all nodes.
+\end{reqlist}
+
+\paragraph{FR-3. Validation.}
+\begin{reqlist}
+    \item[FR-3.1.] The system validate each configuration field against the type, range, or pattern declared in the component's catalog entry, and flag the offending field as the user types.
+    \item[FR-3.2.] The system flag instances that share an identifier with another instance in the same graph.
+    \item[FR-3.3.] The system detect cycles in the graph at export time and refuse the export until the cycle is broken.
+    \item[FR-3.4.] The system detect required slots that are not wired at export time and list every offending node before refusing the export.
+    \item[FR-3.5.] The system surface every validation failure as a notification pop up and on the offending node or edge.
+\end{reqlist}
+
+\pagebreak
+
+\paragraph{FR-4. Topology import and export.}
+\begin{reqlist}
+    \item[FR-4.1.] The system write the canvas state to a JSON file in the format consumed by the existing \textit{diff} loader, with entries ordered such that every component appears after its dependencies.
+    \item[FR-4.2.] The system read an existing topology file, reconstruct the graph, and flag entries whose type is not available in the catalog.
+    \item[FR-4.3.] The system report parse failures with the location of the offending entry.
+\end{reqlist}
+
+\paragraph{FR-5. Workspace lifecycle.}
+\begin{reqlist}
+    \item[FR-5.1.] The system validate the launch directory and present a folder picker when the directory is unsuitable for authoring.
+    \item[FR-5.2.] The system let the user switch the active workspace through a hotkey and through a topbar control.
+    \item[FR-5.3.] The system track unsaved changes and ask the user to confirm before discarding them on a workspace switch.
+\end{reqlist}
+
+\subsection{Non-Functional Requirements}
+\label{sec:nfrs}
+
+The functional requirements describe what the system does. The non-functional requirements (NFRs) constrain how it does it. The categories below follow the ISO/IEC 25010 product-quality model~\cite{iso25010}. Performance and reliability targets are stated against a catalog on the order of a few tens of components.
+
+\paragraph{NFR-1. Performance.}
+\begin{reqlist}
+    \item[NFR-1.1.] A cold catalog load against internal Artifactory repositories should complete in under ten seconds; a cache-served load should complete in under one second.
+    \item[NFR-1.2.] Canvas interactions (pan, zoom, drag, edge draw) remain responsive on a graph of at least fifty nodes and one hundred edges.
+    \item[NFR-1.3.] Writing the workspace topology file for a graph of the size in NFR-1.2 should complete in under two hundred milliseconds on local storage.
+\end{reqlist}
+
+\paragraph{NFR-2. Reliability.}
+\begin{reqlist}
+    \item[NFR-2.1.] The system does not discard unsaved user work without explicit confirmation.
+    \item[NFR-2.2.] The system continue to support authoring when the catalog server becomes unreachable mid-session.
+    \item[NFR-2.3.] The exported topology file is accepted by the existing \textit{diff} loader without changes to the loader, the build pipeline, or the components being instantiated.
+\end{reqlist}
+
+\paragraph{NFR-3. Usability.}
+\begin{reqlist}
+    \item[NFR-3.1.] Every authoring action reachable through the mouse is reachable through the keyboard.
+    \item[NFR-3.2.] Validation failures are visible on the offending node or edge, not only in a global panel.
+    \item[NFR-3.3.] A hotkey reference is reachable from the topbar without leaving the editor.
+\end{reqlist}
+
+\paragraph{NFR-4. Maintainability.}
+\begin{reqlist}
+    \item[NFR-4.1.] The core logic (graph operations, validation, topology I/O, catalog merging) be verifiable in isolation, without launching the full application.
+    \item[NFR-4.2.] Code that depends on external systems (the catalog server, the filesystem) be replaceable by a test substitute without changing the code that uses it.
+    \item[NFR-4.3.] Every change pass the automated quality gates (static analysis, type checking, and the test suites) in continuous integration before it is merged.
+\end{reqlist}
+
+\paragraph{NFR-5. Portability.}
+\begin{reqlist}
+    \item[NFR-5.1.] The application build and run on macOS, Windows, and Linux from a single source tree.
+    \item[NFR-5.2.] The application not require root or administrator privileges to run.
+\end{reqlist}
+
+\paragraph{NFR-6. Security.}
+\begin{reqlist}
+    \item[NFR-6.1.] The renderer process does not hold direct access to the filesystem, the network, or other operating-system interfaces.
+    \item[NFR-6.2.] The application does not transmit catalog data, topology files, or workspace paths to any destination beyond the configured Artifactory URLs.
+\end{reqlist}
+
+\subsection{Architecture Drivers}
+\label{sec:arch-drivers}
+
+Some of the requirements above are important enough to force a design decision. Those are the architecture drivers, and this section lists them. 
+
+\paragraph{AD-1. Separation between core logic and side-effectful adapters.}
+The core logic has to be testable on its own (NFR-4.1), and the parts that reach outside systems have to be replaceable in a test (NFR-4.2). So the design puts a boundary between the two. The core depends only on interfaces, and the real implementations plug into it from outside. \S\ref{sec:hex-arch} shows the layout.
+
+\paragraph{AD-2. Cross-platform desktop with isolated processes and a typed bridge.}
+The tool has to run on macOS, Windows, and Linux from one codebase (NFR-5.1), and the part that draws the interface must not reach the filesystem or the network on its own (NFR-6.1). Both point to the same kind of runtime, a desktop shell that keeps the interface in one process and the system access in another, with a typed channel between them. \S\ref{sec:tech-selection} chooses the runtime and \S\ref{sec:ipc-contract} defines that channel.
+
+\paragraph{AD-3. Two-phase validation: per-field while editing, structural at export.}
+The field checks (FR-3.1, FR-3.2) run on every keystroke, so they have to be fast. The whole-graph checks (FR-3.3, FR-3.4) are slower, and they only need to be triggered when the file is written. So validation is split in two. A quick check runs while the user edits a field, and a full check runs at export, each one pointing at the node or edge that failed (FR-3.5). \S\ref{sec:validation-engine} builds this mechanism.
+
+\paragraph{AD-4. Offline availability of the catalog.}
+The catalog has to be available even when the fetch fails (FR-1.5, NFR-2.2). This calls for a fallback mechanism. The tool uses a fetch-first approach. It tries the network on every launch to get the latest catalog, and reads the local copy only when that fetch fails, so it never serves an old catalog while a fresh one is available. \S\ref{sec:catalog-ingestion} builds the pipeline.
+
+\paragraph{AD-5. Round-trip compatibility.}
+\textit{diff-forge} does not own its file format. The existing \textit{diff} loader has to read the output as it is (FR-4.1, NFR-2.3), and a file re-opened in the tool has to rebuild the same graph (FR-4.2). So export and import are written as exact inverses of each other, and the order of the entries, with each component placed after the ones it depends on, is something the tool computes rather than a matter of presentation. \S\ref{sec:topology-io} builds both directions.
+
+\paragraph{AD-6. Workspace as a first-class lifecycle, with dirty-aware switching.}
+The workspace can be set at launch, picked later from a dialog, or swapped in the middle of a session (FR-5.1, FR-5.2). Any edit to the graph marks the workspace as having unsaved changes. If the integrator switches workspace while that mark is set, the tool asks to confirm before it discards the changes (FR-5.3, NFR-2.1), and a successful export clears the mark. The tool tracks this as a small workspace state machine rather than a fixed setting. \S\ref{sec:canvas-model} and \S\ref{sec:workspace-ui} build it.

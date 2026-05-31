@@ -1,0 +1,30 @@
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, rounded corners=2pt, minimum height=11mm, text width=26mm, align=center, font=\scriptsize},
+    io/.style={box, fill=gray!12},
+    proc/.style={box, fill=white},
+    arr/.style={-{Stealth}, thick},
+    fn/.style={font=\small\itshape}
+]
+% graphToTopology (export)
+\node[io] (g1) {Graph};
+\node[proc, right=7mm of g1] (kahn) {Kahn topo-sort\\(ties by node order)};
+\node[proc, right=7mm of kahn] (deps) {\texttt{depsFor}:\\deps in slot order};
+\node[io, right=7mm of deps] (t1) {Topology JSON};
+\draw[arr] (g1) -- (kahn);
+\draw[arr] (kahn) -- (deps);
+\draw[arr] (deps) -- (t1);
+\node[fn, above=2mm of kahn, anchor=south] {\texttt{graphToTopology}};
+
+% topologyToGraph (import)
+\node[io, below=20mm of g1] (t2) {Topology JSON};
+\node[proc, right=7mm of t2] (parse) {parse +\\shape-check};
+\node[proc, right=7mm of parse] (recon) {per entry: lookup type,\\\texttt{buildSlots}, copy config};
+\node[proc, right=7mm of recon] (lay) {\texttt{layoutByLevels}:\\place by depth};
+\node[io, right=7mm of lay] (g2) {Graph};
+\draw[arr] (t2) -- (parse);
+\draw[arr] (parse) -- (recon);
+\draw[arr] (recon) -- (lay);
+\draw[arr] (lay) -- (g2);
+\node[fn, above=2mm of parse, anchor=south] {\texttt{topologyToGraph}};
+\end{tikzpicture}

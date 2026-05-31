@@ -1,0 +1,197 @@
+\clearpage
+\section{Background}
+
+This chapter establishes the technical and conceptual grounding upon which this thesis is based. \S\ref{sec:foundations} covers the foundations: component-based software engineering in embedded systems, the inversion of control and dependency injection patterns, the \textit{diff} framework itself, and the module distribution platform. \S\ref{sec:related-work} reviews related work in visual composition for software systems and in cross-platform desktop application frameworks.
+
+\subsection{Foundations}
+\label{sec:foundations}
+
+\subsubsection{Component-Based Software Engineering in Embedded Systems}
+
+Component-Based Software Engineering (CBSE) is the practice of building software from independent units called components. Each component is characterized by an interface that defines both the services it provides and the dependencies it requires~\cite{szyperski2002}. This separation of concerns allows components to be developed, tested, and maintained in isolation before being integrated into a larger system.
+
+In the context of embedded system, a component is a functional unit such as hardware drivers, message processing logic, or data sources. Embedded products are developed as a family of variants that share a significant portion of their hardware and software infrastructure but differ in specific functional requirements~\cite{clements2001spl}. Maintaining a separate codebase for every product variant is unscalable and potentially inconsistent, for example, bug fix in a shared module would need to be manually propagated across all repositories.
+
+Developers adopt the CBSE practice to mitigate this challenge by building a catalog of reusable components. Each product variant is then composed from a specific subset of these components to meet the variant's unique requirements~\cite{crnkovic2002}. However, the adoption of CBSE requires a mechanism for managing dependencies, which is addressed by the principles of dependency injection (\S\ref{sec:di-ioc}) and the runtime resolution provided by the \textit{diff} framework (\S\ref{sec:diff-framework}).
+
+\subsubsection{Inversion of Control and Dependency Injection}
+\label{sec:di-ioc}
+
+Inversion of Control (IoC) is a design principle where the flow of control in a program is inverted compared to procedural programming. Instead of a component managing its own execution and lifecycle, a framework assumes responsibility for instantiating components and managing their interactions~\cite{fowler2004di}. 
+
+Dependency Injection (DI) implements IoC by separating the component from the construction of its dependencies: a component declares what it requires, and an external assembler supplies it, typically through constructor parameters or setter methods.
+
+This pattern fundamentally decouples the component's logic from the concrete implementation of its dependencies. In the example below, a component that requires a database connection no longer needs to know how that connection is established or which specific database engine is being used.
+
+\begin{lstlisting}[language=C++, aboveskip=10pt]
+
+// Without DI: Component is coupled to a specific Database
+class Component {
+    Database db{DatabaseFactory::create()};
+};
+
+// With DI: decoupled, the assembler provides the implementation
+class Component {
+  public:
+      Component(Database& db);
+  private:
+      Database& db_;
+};
+\end{lstlisting}
+
+\paragraph{Static vs.\ Runtime DI}
+DI implementations are categorized by when the dependency graph is resolved.
+
+\begin{figure}[ht]
+    \centering
+    \resizebox{\textwidth}{!}{
+        \input{tex/diagrams/fig-2-1-static-vs-runtime-di}
+    }
+    \caption{Static DI vs.\ runtime DI.}
+    \label{fig:static-vs-runtime-di}
+\end{figure}
+
+\textbf{Static DI} occurs at compile time. The compiler ensures that all dependencies are satisfied, providing high performance and type safety. However, this approach requires the binary to be rebuilt for every product variant.
+
+\textbf{Runtime DI} occurs at process startup by reading from a data description (XML, JSON, YAML). This allows a single binary to be used by multiple product variants, though errors in the topology file are caught only when the application starts.
+
+\paragraph{Dependency Injection in C++14}
+C++14 has no reflection-based DI container like Java or C\#, so frameworks build their own using the Curiously Recurring Template Pattern~\cite{coplien1995}. DI in C++14~\cite{cpp14standard} also relies on template metaprogramming and static initialization. The work from Niespodziany~\cite{niespodziany2025} details how the \textit{diff} framework (\S\ref{sec:diff-framework}) applies these techniques.
+
+\FloatBarrier
+
+\subsubsection{The \textit{diff} Framework}
+\label{sec:diff-framework}
+
+The \textit{diff} framework~\cite{niespodziany2025} is a runtime DI implementation for C++14 embedded software. Figure~\ref{fig:diff-workflow} describes its end-to-end workflow: Component classes register their factories at static-initialization time. At runtime, the framework reads the topology JSON, looks up the factories by type name, and instantiates the components into a live application accessible by interface.
+\begin{figure}[ht]
+    \centering
+    \resizebox{\textwidth}{!}{
+        \input{tex/diagrams/fig-2-2-diff-workflow}
+    }
+    \caption[The \textit{diff} workflow.]{The \textit{diff} workflow. }
+    \label{fig:diff-workflow}
+\end{figure}
+
+\paragraph{Components and interface components}
+Niespodziany~\cite{niespodziany2025} distinguishes two kinds of components. An \textit{interface component} is a header-only entity (a pure-virtual C++ class) that defines a contract, while a regular \textit{component} implements logic and data structure. A component class inherits from \texttt{diff::Component<T, ...>}, where \texttt{T} is the class itself and the remaining template parameters declare which interfaces the component provides. 
+
+\begin{lstlisting}[language=C++, caption={A \textit{diff} component that implements the \texttt{ILink} interface.}, label=lst:diff-component, aboveskip=10pt]
+// ILink.h - interface component (header-only)
+class ILink {
+public:
+    virtual ~ILink() = default;
+    virtual bool send(const std::string& message) = 0;
+};
+
+// LinkGsm.h - component implementation
+class LinkGsm : public diff::Component<LinkGsm, diff::as<ILink>> {
+public:
+    LinkGsm();
+    bool send(const std::string& message) override;
+};
+\end{lstlisting}
+
+\paragraph{The topology file}
+The system's composition is described by a JSON \textit{topology} file. Each entry carries the component's type name, a unique instance identifier, the identifiers of the dependencies to be injected, and a typed configuration map. The framework instantiates the entries in order, so the topology must be in dependency order: every component appears after the components it depends on.
+
+\begin{lstlisting}[caption={Topology entry consumed by the \textit{diff} loader.}, label=lst:topology-entry, aboveskip=10pt]
+{
+  "type": "MessageSource",
+  "id": "msgSrc0",
+  "version": "1.0.0",
+  "source": "https://artifactory.example.com/artifactory/diff",
+  "dependencies": ["linkEth0", "linkGsm0"],
+  "config": {
+    "count": 3,
+    "content": "Diff says hello."
+  }
+}
+\end{lstlisting}
+
+Because the binary's behavior is determined by the input JSON, a product variant is defined by a data change rather than a code change, hence the name \textit{data-driven} composition~\cite{niespodziany2025}. This data-driven approach allows one build to serve many variants. However, it shifts the validation burden from the compiler to the developer.
+
+\subsubsection{Module Distribution: Conan and Artifactory}
+\label{sec:module-distribution}
+
+The \textit{diff} ecosystem uses the \textbf{Conan} package manager~\cite{conan} to manage component lifecycles. Conan packages are identified by a name and version, and they carry build scripts (recipes) that describe how to compile and package the library. A standard Conan package follows this naming convention: \texttt{<name>/<version>@<user>/<channel>}.
+
+\textbf{Artifactory}~\cite{artifactory} is a binary repository manager from JFrog that supports the Conan protocol. Teams publish their internal C++ libraries as Conan packages to an Artifactory repository, and consumer projects fetch them through standard Conan tooling or via Artifactory's application programming interface (API).
+
+In a \textit{diff}-based environment, each component is distributed as a Conan package that carries a JSON metadata file. This metadata describes the component's boundaries and requirements to consumers. The \texttt{type} and \texttt{version} fields identify the component type and its specific release. The \texttt{implements} array lists the interfaces that the component implements, and the \texttt{requires} array defines the dependency slots that must be filled (each specifying a slot name, an interface type, and an \texttt{isArray} flag for multi-binding). The \texttt{config} object defines the available configuration parameters and the constraints on
+  each, based on parameter type (e.g., strings have a length limit, integers have a value range, and
+  parameters may carry a default value).
+
+\begin{lstlisting}[caption={Metadata schema of the \texttt{MessageSource} component.}, label=lst:catalog-entry, aboveskip=10pt]
+{
+  "type": "MessageSource",
+  "version": "1.0.0",
+  "implements": ["IProcessable"],
+  "requires": [
+    { "slot": "link",    "type": "ILink" },
+    { "slot": "backup",  "type": "ILink", "isArray": true }
+  ],
+  "config": {
+    "count":   { "type": "uint32", "min": 1, "max": 1000 },
+    "content": { "type": "string", "default": "msg" }
+  }
+}
+\end{lstlisting}
+
+\subsection{Related Work}
+\label{sec:related-work}
+
+\subsubsection{Visual Composition for Software Systems}
+
+Visual composition tools allow developers to build software by arranging and connecting nodes on a canvas, replacing or supplementing textual code. The approach has a long history in domain-specific environments: LabVIEW~\cite{labview} for instrumentation and measurement software, Simulink~\cite{simulink} for control-system modeling, Node-RED~\cite{nodered} for IoT devices and web services.
+
+In all of these tools, the canvas is a directed graph. Nodes represent units of computation or component instances. Edges represent dataflow or dependency relationships. Two fundamental graph-theory concepts are particularly relevant to the design of \textit{diff-forge}: the directed acyclic graph and the algorithm used for ordering its nodes.
+
+\paragraph{Directed Acyclic Graph (DAG)}
+is a finite directed graph that contains no directed cycles~\cite{cormen2009}. Each edge has a direction, and no sequence of edges returns to its starting node. DAGs are the natural model for dependency relationships in software. Each component depends on zero or more others, and a cycle would mean a transitive self-dependency that cannot be resolved during instantiation.
+
+The \textit{diff} framework requires the topology to be a DAG. The loader will refuse to instantiate any topology that contains a cycle. \textit{diff-forge} enforces the DAG property at export time. When the user attempts to export a topology that contains a cycle, the validation engine rejects it and points at the cycle's edges.
+
+\paragraph{Topological Sorting}
+produces a linear ordering of a DAG's nodes such that for every directed edge $(u, v)$, node $u$ appears before node $v$ in the sequence~\cite{cormen2009}. For a dependency graph, a topological order is a valid construction sequence as every component's dependencies appear before the component itself.
+
+Kahn's algorithm~\cite{kahn1962} is a widely used method for computing a topological order in linear time (Figure~\ref{fig:kahn-algorithm}). It begins with the set of nodes that have no incoming edges. At each step, it removes one such node from the set, appends it to the output, and reduces the in-degree of each neighbor. Any neighbor that drops to zero in-degree joins the set. The algorithm terminates when the set is empty. If all nodes have been emitted, the output is a valid topological order. If some nodes remain unemitted, the graph contains a cycle.
+
+\begin{figure}[ht]
+    \centering
+    \resizebox{\textwidth}{!}{
+        \input{tex/diagrams/fig-2-3-kahn-algorithm}
+    }
+    \caption{Step-by-step topological sorting using Kahn's algorithm.}
+    \label{fig:kahn-algorithm}
+\end{figure}
+
+\textit{diff-forge} uses Kahn's algorithm during export. The topology JSON file requires entries to appear in load-compatible order (dependencies before dependents).
+
+\subsubsection{Cross-Platform Desktop Application Frameworks}
+\label{sec:cross-platform-frameworks}
+Building a visual editor requires a framework that can target Windows, macOS, and Linux from a single codebase. The candidates differ along two primary dimensions: the rendering technology and the application's primary programming language. The choice of framework is critical, as it determines the type system, the available library ecosystem, and the overall architecture of the tool. Table~\ref{tab:cross-platform} summarizes the four frameworks considered for this project.
+\begin{table}[ht]
+\centering
+\caption[Cross-platform desktop application frameworks compared.]{Cross-platform desktop application frameworks compared.}
+\label{tab:cross-platform}
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Framework} & \textbf{Renderer} & \textbf{App language} \\
+\midrule
+Electron        & Chromium + Node.js & TypeScript / JavaScript \\
+Qt (Widgets / QML) & Native widgets / Qt Quick & C++ \\
+Tauri           & Native WebView     & Rust + TypeScript \\
+Flutter Desktop & Skia               & Dart \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Electron}~\cite{electronjs} bundles a Chromium browser and a Node.js runtime. The user interface (UI) is developed using standard web technologies, while the backend interacts with the operating system (OS) through a multi-process architecture with a typed Inter-Process Communication (IPC) bridge. Electron is widely used with TypeScript and the npm ecosystem, providing access to graph-editing libraries like React Flow~\cite{react_flow} and schema-validation tools like Zod~\cite{zod}. While it offers a highly consistent development experience across platforms, the primary trade-off is the significant memory and binary size when bundling a full browser engine.
+
+\textbf{Qt}~\cite{qt} is a long-standing C++ framework that offers native-looking interfaces via its Widgets module and hardware-accelerated UIs through QML, its declarative UI language. Sharing the same programming language with \textit{diff} means sharing the same build system and package manager, making it a reasonable choice. However, the lack of first-class support for structural typing and idiomatic runtime schema-validation libraries means that boundary code (e.g., JSON parsing or IPC) requires more manual infrastructure compared to web-based alternatives.
+
+\textbf{Tauri}~\cite{tauri} uses the OS-provided WebView (WebKit on macOS, WebView2 on Windows, WebKitGTK on Linux) for the UI. It is performant, memory-safe by using Rust on host side. Utilizing the OS WebView instead of bundling Chromium keeps packaged binaries significantly smaller than Electron's~\cite{tauribenchmarks}. The disadvantage of the framework is a less uniform rendering surface across platforms and a smaller library ecosystem.
+
+\textbf{Flutter Desktop}~\cite{flutter} uses Google's Skia renderer to draw all UI elements directly. The result is a consistent look across platforms and full control over the rendering surface. This framework shares \textbf{Tauri} disadvantage, with a smaller library ecosystem than TypeScript. The node-and-edge graph-editor tooling on Dart is also less developed than the React Flow library.

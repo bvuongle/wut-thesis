@@ -1,0 +1,74 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    head/.style={draw, rounded corners=2pt, fill=white, text width=24mm, minimum height=11mm, align=center, anchor=north},
+    life/.style={dashed, gray},
+    call/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    msg/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+    frame/.style={draw, thick},
+    ftag/.style={draw, thick, fill=white, font=\scriptsize\bfseries, inner sep=2pt, anchor=north west}
+]
+\def\sp{34mm}
+\node[head] (lc) at (0*\sp, 0) {\texttt{loadCatalog}};
+\node[head] (lo) at (1*\sp, 0) {\texttt{loadOneRepo}};
+\node[head] (ar) at (2*\sp, 0) {Artifactory\\REST};
+\node[head] (ca) at (3*\sp, 0) {\texttt{FsCatalogCache}};
+\node[head] (mg) at (4*\sp, 0) {\texttt{mergeCatalogs}};
+
+\def\botY{-126mm}
+\foreach \n in {lc,lo,ar,ca,mg}{
+    \draw[life] (\n.south) -- (\n.south |- 0,\botY);
+}
+
+% Message rows (absolute y, generous spacing so labels never touch).
+\def\rLoopTop{-14mm}%
+\def\rA{-22mm}        % loadOneRepo(url)
+\def\rB{-32mm}        % search REST
+\def\rAltTop{-38mm}%
+\def\rC{-46mm}        % components (return)
+\def\rD{-56mm}        % clearRepo + writeCache
+\def\rE{-62mm}        % result = ok
+\def\rDiv{-68mm}      % alt divider [fetch fails]
+\def\rF{-78mm}        % readRepoFromCache
+\def\rG{-88mm}        % slice (return)
+\def\rH{-94mm}        % result = stale / failed
+\def\rAltBot{-100mm}%
+\def\rLoopBot{-105mm}%
+\def\rI{-114mm}       % merge surviving slices
+\def\rJ{-121mm}       % CatalogDocument (return) + final outcome
+
+% loop [per repo URL] frame.
+\coordinate (loopTL) at ($(lc.south)+(-8mm,\rLoopTop)$);
+\coordinate (loopBR) at ($(ca.south)+(10mm,\rLoopBot)$);
+\draw[frame] (loopTL) rectangle (loopBR);
+\node[ftag] at (loopTL) {loop [per repo URL]};
+
+% loadCatalog -> loadOneRepo, loadOneRepo -> REST
+\draw[call] (lc.center |- 0,\rA) -- node[msg, above]{\texttt{loadOneRepo(url)}} (lo.center |- 0,\rA);
+\draw[call] (lo.center |- 0,\rB) -- node[msg, above]{search \texttt{?q=*} / revisions / tarball} (ar.center |- 0,\rB);
+
+% alt frame (both branches), nested inside the loop.
+\coordinate (altTL) at ($(lo.south)+(-8mm,\rAltTop)$);
+\coordinate (altBR) at ($(ca.south)+(8mm,\rAltBot)$);
+\draw[frame] (altTL) rectangle (altBR);
+\node[ftag] at (altTL) {alt [fetch ok]};
+
+% fetch ok branch
+\draw[ret] (ar.center |- 0,\rC) -- node[msg, above]{components} (lo.center |- 0,\rC);
+\draw[call] (lo.center |- 0,\rD) -- node[msg, above]{\texttt{clearRepo} + \texttt{writeCache} (per component)} (ca.center |- 0,\rD);
+\node[msg, anchor=west] at (lo.center |- 0,\rE) {result = \texttt{ok}};
+
+% alt divider
+\draw[dashed] (altTL |- 0,\rDiv) -- (altBR |- 0,\rDiv);
+\node[ftag] at ($(altTL |- 0,\rDiv)$) {[fetch fails]};
+
+% fetch fails branch
+\draw[call] (lo.center |- 0,\rF) -- node[msg, above]{\texttt{readRepoFromCache}} (ca.center |- 0,\rF);
+\draw[ret] (ca.center |- 0,\rG) -- node[msg, above]{slice} (lo.center |- 0,\rG);
+\node[msg, anchor=west] at (lo.center |- 0,\rH) {result = \texttt{stale} (non-empty) / \texttt{failed} (empty)};
+
+% After the loop: merge + return outcome.
+\draw[call] (lc.center |- 0,\rI) -- node[msg, above]{merge surviving slices} (mg.center |- 0,\rI);
+\draw[ret] (mg.center |- 0,\rJ) -- node[msg, above]{\texttt{CatalogDocument}} (lc.center |- 0,\rJ);
+\node[msg, anchor=north west] at ($(lc.center |- 0,\rJ)+(0,-3mm)$) {return \texttt{ready / partial / error / unconfigured}};
+\end{tikzpicture}

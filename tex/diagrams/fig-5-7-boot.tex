@@ -1,0 +1,25 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    app/.style={draw, rounded corners=2pt, fill=blue!10, text width=42mm, align=center, minimum height=8mm},
+    effect/.style={draw, rounded corners=2pt, fill=green!12, text width=44mm, align=center, minimum height=8mm},
+    layout/.style={draw, rounded corners=2pt, fill=orange!14, text width=40mm, align=center, minimum height=8mm},
+    dec/.style={diamond, draw, aspect=2.6, inner sep=1pt, fill=yellow!18, align=center, font=\scriptsize},
+    arr/.style={-{Stealth}, thick},
+    lbl/.style={font=\scriptsize\itshape}
+]
+\node[app] (app) {App.tsx (renderer root)};
+\node[effect, below=9mm of app, xshift=-32mm] (a) {Effect A: load catalog\\ into catalogStore};
+\node[effect, below=9mm of app, xshift=32mm] (b) {Effect B: workspace status\\ into workspaceStore};
+\node[dec, below=10mm of app, yshift=-12mm] (ready) {catalog usable\\ and workspace valid?};
+\node[layout, below=10mm of ready, xshift=-34mm] (welcome) {InitialLayout\\ welcome: pick workspace,\\ retry catalog};
+\node[layout, below=10mm of ready, xshift=34mm] (main) {MainLayout (editor)};
+\node[effect, below=9mm of main] (c) {Effect C: load topology,\\ topologyToGraph into graphStore};
+
+\draw[arr] (app) -- node[lbl, left]{concurrent} (a);
+\draw[arr] (app) -- (b);
+\draw[arr] (a) -- (ready);
+\draw[arr] (b) -- (ready);
+\draw[arr] (ready) -- node[lbl, above left]{no} (welcome);
+\draw[arr] (ready) -- node[lbl, above right]{yes} (main);
+\draw[arr] (main) -- node[lbl, right]{on first ready} (c);
+\end{tikzpicture}

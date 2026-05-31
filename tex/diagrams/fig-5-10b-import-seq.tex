@@ -1,0 +1,36 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    head/.style={draw, rounded corners=2pt, fill=white, text width=32mm, minimum height=10mm, align=center, anchor=north},
+    life/.style={dashed, gray},
+    call/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    msg/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+    frame/.style={draw, thick},
+    ftag/.style={draw, thick, fill=white, font=\scriptsize\bfseries, inner sep=2pt, anchor=north west}
+]
+\def\sp{46mm}
+\node[head] (tg) at (0,0) {\texttt{topologyToGraph}};
+\node[head] (cb) at (\sp,0) {catalog + \texttt{buildSlots}};
+\node[head] (ll) at (2*\sp,0) {\texttt{layoutByLevels}};
+\def\botY{-71mm}
+\foreach \n in {tg,cb,ll}{\draw[life] (\n.south) -- (\n.south |- 0,\botY);}
+
+\def\rPa{-16mm}\def\rPb{-22mm}\def\loopT{-28mm}\def\rC{-37mm}\def\rD{-45mm}\def\loopB{-50mm}
+\def\rE{-58mm}\def\rF{-66mm}
+
+% self-call: parse + shape-check
+\draw[call] (tg.center |- 0,\rPa) -- ++(7mm,0) |- (tg.center |- 0,\rPb);
+\node[msg, anchor=west] at ($(tg.center |- 0,\rPa)+(9mm,-3mm)$) {parse + shape-check};
+
+% loop [per entry]
+\draw[frame] (-12mm,\loopT) rectangle (\sp+14mm,\loopB);
+\node[ftag] at (-12mm,\loopT) {loop [per entry]};
+\draw[call] (tg.center |- 0,\rC) -- node[msg,above]{lookup type, build slots} (cb.center |- 0,\rC);
+\draw[ret]  (cb.center |- 0,\rD) -- node[msg,above]{node skeleton} (tg.center |- 0,\rD);
+
+% layout, after the loop
+\draw[call] (tg.center |- 0,\rE) -- node[msg,above]{place by depth} (ll.center |- 0,\rE);
+\draw[ret]  (ll.center |- 0,\rF) -- node[msg,above]{positions} (tg.center |- 0,\rF);
+
+\node[msg, anchor=north west] at (-12mm,\botY) {result: the reconstructed \texttt{Graph}};
+\end{tikzpicture}

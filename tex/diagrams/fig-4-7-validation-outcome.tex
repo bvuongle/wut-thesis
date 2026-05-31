@@ -1,0 +1,43 @@
+\begin{tikzpicture}[
+    font=\small,
+    state/.style={draw, rounded corners=3pt, minimum height=9mm, text width=30mm, align=center, fill=white},
+    dec/.style={diamond, draw, aspect=2.2, inner sep=1pt, align=center, font=\scriptsize, fill=white},
+    arr/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    lbl/.style={font=\scriptsize, fill=white, inner sep=1pt},
+    trig/.style={font=\scriptsize\itshape}
+]
+\node[state] (edit) {Editing on canvas};
+
+% Per-field branch (left): runs on every config edit, non-blocking
+\node[dec, below left=16mm and 20mm of edit] (pf) {value\\in range?};
+\node[state, below=14mm of pf] (flagged) {Field flagged\\(red input)};
+
+% Structural branch (right): runs at export, blocking
+\node[dec, below right=16mm and 20mm of edit] (st) {graph\\valid?};
+\node[state, below=14mm of st] (written) {File written,\\graph clean};
+\node[state, below=12mm of written] (blocked) {Export blocked,\\nodes flagged};
+
+% Triggers
+\draw[arr] (edit) -- node[trig, above left]{config edit} (pf);
+\draw[arr] (edit) -- node[trig, above right]{export request} (st);
+
+% Per-field outcomes (forward)
+\draw[arr] (pf) -- node[lbl, left]{no} (flagged);
+
+% Structural outcomes (forward)
+\draw[arr] (st) -- node[lbl, left]{yes} (written);
+\draw[arr] (written) -- node[lbl, left]{no} (blocked);
+
+% Returns to edit, routed orthogonally around the outside.
+% Left side: two return lanes at increasing distance from the centre.
+\draw[ret] (pf.west) -| node[lbl, below, pos=0.2]{yes} ($(flagged.west)+(-12mm,26mm)$) |- (edit.west);
+\draw[ret] (flagged.west) -| node[lbl, below, pos=0.2]{valid edit} ($(flagged.west)+(-20mm,0)$) |- ($(edit.west)+(0,3mm)$);
+
+% Right side: two return lanes at increasing distance from the centre.
+\draw[ret] (written.east) -| node[lbl, below, pos=0.2]{reopen} ($(blocked.east)+(10mm,26mm)$) |- (edit.east);
+\draw[ret] (blocked.east) -| node[lbl, below, pos=0.2]{fix and retry} ($(blocked.east)+(20mm,0)$) |- ($(edit.east)+(0,3mm)$);
+
+\node[trig, below=4mm of blocked, text width=40mm, align=center]
+    {cycle, unfilled required slot, or type-mismatched edge};
+\end{tikzpicture}

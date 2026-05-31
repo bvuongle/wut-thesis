@@ -1,0 +1,16 @@
+\begin{tikzpicture}[
+  font=\small,
+  ctx/.style={draw, rounded corners=3pt, align=center, text width=27mm, minimum height=18mm, fill=white},
+  dep/.style={-{Stealth}, thin},
+  dlbl/.style={font=\scriptsize, fill=white, inner sep=1.5pt}
+]
+\node[ctx] (catalog) {\textbf{Catalog}\\[2pt]\scriptsize component metadata, merge, search, filter};
+\node[ctx, right=26mm of catalog] (graph)    {\textbf{Graph}\\[2pt]\scriptsize nodes, edges, config, operations, validation};
+\node[ctx, right=26mm of graph]   (topology) {\textbf{Topology}\\[2pt]\scriptsize JSON wire format, graph and topology translation};
+\node[ctx, below=14mm of graph]   (workspace){\textbf{Workspace}\\[2pt]\scriptsize launch directory, validity decision};
+
+\draw[dep] (graph.west)    -- node[dlbl, above]{slots from}   (catalog.east);
+\draw[dep] (topology.west) -- node[dlbl, above]{nodes, edges} (graph.east);
+
+\node[font=\itshape, above=5mm of graph] {Core};
+\end{tikzpicture}

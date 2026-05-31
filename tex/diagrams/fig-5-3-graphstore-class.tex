@@ -1,0 +1,48 @@
+\begin{tikzpicture}[
+    font=\small,
+    class/.style={draw, rounded corners=1pt, rectangle split, rectangle split parts=3,
+        align=left, text width=62mm},
+    small/.style={draw, rounded corners=1pt, rectangle split, rectangle split parts=2,
+        align=left, text width=50mm, font=\footnotesize},
+    comp/.style={{Diamond[length=2.8mm,width=2mm]}-, thick},
+    dep/.style={-{Stealth}, thick, dashed},
+    lbl/.style={font=\scriptsize\itshape}
+]
+\node[class] (store) {
+    \textbf{GraphStore}\\[1pt]\scriptsize\textit{Zustand store}
+    \nodepart{second}
+    graph : Graph\\
+    dirty : boolean\\
+    selectedNodeIds : Set\\
+    selectedEdgeIds : Set\\
+    flaggedNodeIds : Set
+    \nodepart{third}
+    setGraph() $\cdot$ markClean()\\
+    addNode() $\cdot$ removeNode()\\
+    addEdge() $\cdot$ removeEdge()\\
+    moveNode() $\cdot$ updateNodeConfig()\\
+    renameNode() $\cdot$ removeSelected()\\
+    selectNode / selectEdge / selectElements\\
+    clearSelection() $\cdot$ setFlaggedNodeIds()
+};
+
+\node[small, right=26mm of store.east, yshift=20mm] (graph) {
+    \textbf{Graph}
+    \nodepart{second}
+    nodes : GraphNode[]\\
+    edges : GraphEdge[]
+};
+
+\node[small, right=26mm of store.east, yshift=-22mm] (ops) {
+    \textbf{graphOperations}\\[1pt]\scriptsize\textit{core}
+    \nodepart{second}
+    addNode(g, n) : Graph\\
+    removeNode(g, id) : Graph\\
+    addEdge / removeEdge / moveNode\\
+    updateNodeConfig / renameNode\\
+    validateEdge(g, e) : boolean
+};
+
+\draw[comp] (store.east) -- node[lbl, above]{holds} (graph.west);
+\draw[dep]  (store.east) -- node[lbl, below]{delegates to} (ops.west);
+\end{tikzpicture}

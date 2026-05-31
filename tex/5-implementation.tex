@@ -1,0 +1,507 @@
+\clearpage
+\section{Implementation}
+
+This chapter walks through the implementation that gives the design its shape. \S5.1 covers the project structure and the tooling that holds it together. \S5.2 to \S5.7 step through the implementations of the six design problems from Chapter~4 in the same order: the IPC contract, catalog ingestion, graph state management, canvas rendering, topology I/O, and the validation engine. \S5.8 covers the workspace lifecycle, the user-interface shell that ties everything together, and the keyboard bindings.
+
+\subsection{Project Structure and Tooling}
+\label{sec:project-structure}
+
+The source tree lays one folder per layer from \S\ref{sec:hex-arch}. Listing~\ref{lst:src-tree} shows the top of the tree at the time of writing.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[caption={Top-level layout of \texttt{diff-forge/src/}.}, label=lst:src-tree, aboveskip=10pt]
+src/
+  core/                  pure TypeScript logic
+  contracts/             contract interfaces
+  adapters/              contract implementations
+  state/                 Zustand stores + cross-store commands
+  components/            React tree
+    canvas/              nodes, edges, hooks, the React Flow shell
+    catalog/             left-side catalog panel
+    topbar/              workspace chip, save, help, hotkey reference
+    welcome/             initial-launch screen + workspace picker
+    layout/              MainLayout, InitialLayout, NotificationHost
+  electron/              main process + preload (the IPC bridge)
+  styles/, assets/       MUI theme and static assets
+  testing/               in-memory test doubles and fixtures
+  App.tsx                renderer root (boot effects, layout choice)
+  main.tsx               React entry point
+\end{lstlisting}
+\end{addmargin}
+
+\paragraph{}
+Each layer has a TypeScript path alias (\texttt{@core}, \texttt{@adapters}, \texttt{@state}, and so on) declared once and shared by the bundler and the test runner. The ESLint \texttt{no-restricted-imports} rule is keyed on those aliases to guard the process boundary (\S\ref{sec:hex-arch}). A pre-commit hook (husky) runs the linter, the formatter, and the unit suite over the staged change before a commit is allowed.
+
+\paragraph{}
+Additionally, the codebase is driven by a small set of \texttt{pnpm} scripts covering the development loop, the production build, and the common CI tasks (type-check, lint, test). Table~\ref{tab:pnpm-scripts} lists the most-used ones.
+
+\begin{table}[ht]
+\centering
+\caption[Most-used \texttt{pnpm} scripts.]{Most-used \texttt{pnpm} scripts.}
+\label{tab:pnpm-scripts}
+\footnotesize
+\begin{tabular}{ll}
+\toprule
+\textbf{Script} & \textbf{Effect} \\
+\midrule
+\texttt{pnpm dev}        & Vite + Electron with hot reload (\texttt{VITE\_DEV\_SERVER\_URL} set) \\
+\texttt{pnpm build}      & \texttt{tsc} type-check then \texttt{vite build} for renderer and main \\
+\texttt{pnpm test}       & Vitest, unit + component tests (no Electron, no real network) \\
+\texttt{pnpm test:e2e}   & Playwright drives the packaged Electron app end-to-end \\
+\texttt{pnpm typecheck}  & \texttt{tsc --noEmit}, fast feedback in CI \\
+\texttt{pnpm lint}       & ESLint over \texttt{src/}, including the layer-boundary rules \\
+\texttt{pnpm dist}       & \texttt{electron-builder} packages the Linux \texttt{.deb} artifact \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Inter-Process Communication Contract}
+\label{sec:ipc-contract}
+
+The renderer and the main process run as separate OS processes. They cannot share a TypeScript runtime, so the only thing they can both see is a wire contract. That contract is a single TypeScript type, \texttt{HostApi}, declared once in \texttt{src/contracts/IpcContract.ts} and exported to both sides.
+
+\paragraph{The contract type.}
+\texttt{HostApi} is a nested namespace per concern. Listing~\ref{lst:hostapi} shows the current shape: four namespaces (\texttt{workspace}, \texttt{dialog}, \texttt{topology}, \texttt{catalog}) and six methods. Each method returns a promise of a typed outcome.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[language=, caption={The IPC contract type.}, label=lst:hostapi, aboveskip=10pt]
+type HostApi = {
+  workspace: {
+    status:     () => Promise<WorkspaceStatus>
+    openAtPath: (
+      payload: { path: string }
+    ) => Promise<OpenWorkspaceOutcome>
+  }
+  dialog: {
+    openWorkspace: () => Promise<OpenWorkspaceOutcome>
+  }
+  topology: {
+    export: (
+      payload: { topology: string }
+    ) => Promise<TopologyExportOutcome>
+    load:   () => Promise<TopologyLoadOutcome>
+  }
+  catalog: {
+    load: () => Promise<CatalogLoadOutcome>
+  }
+}
+\end{lstlisting}
+\end{addmargin}
+
+\paragraph{The renderer side.}
+A lightweight preload script wraps each \texttt{HostApi} method in an \texttt{ipcRenderer.invoke} call and exposes the collection as \texttt{window.electronAPI} via the \texttt{contextBridge}. Renderer adapters then wrap \texttt{electronAPI} and implement the contract interfaces detailed in \S\ref{sec:hex-arch}, ensuring that UI components and application state never interact directly with IPC channel names.
+
+\paragraph{The main side.}
+\texttt{electron/main.ts} is the only file that registers IPC handlers. On \texttt{app.ready} it constructs the production adapters once and registers one handler per channel (Listing~\ref{lst:mainipc}). Constructing the adapters once keeps the catalog and the workspace as long-lived singletons.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[language=, caption={Workspace IPC registration. Adapters are constructed once and each handler is a pass-through.}, label=lst:mainipc, aboveskip=10pt]
+app.on('ready', () => {
+  const workspaceStore = createFsWorkspaceStore(
+    { getMainWindow: () => mainWindow }
+  )
+
+  ipcMain.handle(
+    'workspace:status',     
+    () => workspaceStore.getStatus()
+  )
+  ipcMain.handle(
+    'topology:export',      
+    (_, p) => workspaceStore.saveTopology(p.topology)
+  )
+
+  createWindow()
+})
+\end{lstlisting}
+\end{addmargin}
+
+\paragraph{A call across the boundary.}
+Figure~\ref{fig:export-sequence} follows one contract call from the renderer to the main process. The renderer hands a single typed value, the serialised topology, to the preload bridge, which forwards it across to the handler that does the work.
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{
+        \input{tex/diagrams/fig-5-8-export-sequence}
+    }
+    \caption[An export request crossing the process boundary.]{An export request crossing the process boundary.}
+    \label{fig:export-sequence}
+\end{figure}
+
+\paragraph{Security boundary.}
+The browser window is created with \texttt{nodeIntegration: false} and \texttt{contextIsolation: true}~\cite{electronjs}. Renderer code cannot reach Node APIs directly, the isolation NFR-6.1 requires, and the only way into the main process is one of the six methods registered above. Adding a new capability is a two-file change: add the method to \texttt{HostApi} (and its outcome type), then register the corresponding handler in \texttt{main.ts}. The renderer adapter is typed against \texttt{HostApi}, so a call that drifts from the contract fails to compile. The preload bridge and the main-side registration use string-keyed channels, caught by the end-to-end tests rather than the compiler.
+
+\FloatBarrier
+
+\subsection{Catalog Ingestion}
+\label{sec:catalog-impl}
+
+The design in \S\ref{sec:catalog-ingestion} fans out a parallel fetch over the configured Artifactory URLs, falls back to a per-component on-disk cache when a repository fails, and returns one of four outcomes (\textit{ready}, \textit{partial}, \textit{error}, \textit{unconfigured}). Figure~\ref{fig:catalog-classes} shows the types involved and the pure functions that connect them: the Conan-side fragment becomes a validated \texttt{CatalogComponent}, a drop turns that component into a \texttt{GraphNode}, and the component's declared requirements become the node's ports.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.96\textwidth}{!}{
+        \input{tex/diagrams/fig-5-3-catalog-classes}
+    }
+    \caption[Catalog types and the functions that connect them.]{Catalog types and the pure functions that connect them, from the Conan-side fragment to a node on the canvas.}
+    \label{fig:catalog-classes}
+\end{figure}
+
+\paragraph{}
+\texttt{CatalogSchema.ts} declares the catalog entry as a Zod schema, and the TypeScript type comes from the same declaration with \texttt{z.infer} (Listing~\ref{lst:catalog-schema}). Every parse of an external JSON, from Artifactory, the cache, or a drag payload, runs through that one schema, so the runtime check and the static type cannot drift.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[language=, caption={One Zod schema yields both the runtime validator and the static type.}, label=lst:catalog-schema, aboveskip=10pt]
+const CatalogComponentZ = z.object({
+  type:     z.string(),
+  version:  z.string(),
+  requires: z.array(z.object({ slot: z.string(), type: z.string() })),
+  // ... source, implements, config
+})
+
+type CatalogComponent = z.infer<typeof CatalogComponentZ>
+\end{lstlisting}
+\end{addmargin}
+
+\paragraph{}
+\texttt{CatalogSource} is one contract with three implementations: the Artifactory-backed source used in production, a file-backed source used for local tests, and the renderer-side client that forwards over IPC. The Artifactory source does not build its own cache; a \texttt{CatalogCache} is passed to its constructor. Production injects the filesystem cache, while a unit test injects an in-memory double that satisfies the same contract. Neither the source nor its tests change when the cache implementation changes, which is the property AD-1 asked for.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.95\textwidth}{!}{
+        \input{tex/diagrams/fig-5-1-catalog-di}
+    }
+    \caption[Polymorphism and injection around the catalog contracts.]{Polymorphism and injection around the catalog contracts.}
+    \label{fig:catalog-di}
+\end{figure}
+
+\paragraph{}
+\texttt{loadCatalog} parses the environment, issues one fetch per repository concurrently, and folds the per-repository results into the outcome from Table~\ref{tab:catalog-outcomes}, with a message naming how many slices are stale and how many failed. The fold is a few lines; the work is per-repository. Figure~\ref{fig:catalog-sequence} shows the fan-out and per-repository fallback.
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{
+        \input{tex/diagrams/fig-5-9-catalog-sequence}
+    }
+    \caption[Catalog fan-out with per-repository fresh-or-cache fallback.]{Catalog fan-out with per-repository fresh-or-cache fallback. Each repository fetches in the loop; a failed fetch falls back to the on-disk cache slice, and the surviving slices merge into one document.}
+    \label{fig:catalog-sequence}
+\end{figure}
+\paragraph{}
+\texttt{loadOneRepo} triggers fetch from Artifactory. It lists every package reference, downloads the export tarball, and reads \texttt{diff.metadata.json} from it through the catalog schema, following the Conan v2 repository protocol~\cite{conan}. On success, it uses \texttt{FsCatalogCache} to rewrite the repository's cache, under a directory keyed by the SHA-1 of the repository URL so the path is stable across formatting tweaks and carries no traversal characters. On failure, it also uses \texttt{FsCatalogCache} to read the cached slice, returning \textit{stale} when the slice is non-empty and \textit{failed} when it is empty. Finally, \texttt{mergeCatalogs} concatenates the documents.
+
+\pagebreak
+
+\paragraph{}
+The renderer presents the merged catalog in a left-hand panel. The panel groups components and offers two search modes, by component name and by interface, alongside a per-source filter and a refresh button that re-runs \texttt{loadCatalog} on demand.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{catalog-panel-1.png}
+        \caption{Browse by name.}
+        \label{fig:catalog-panel-a}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{catalog-panel-2.png}
+        \caption{Name search.}
+        \label{fig:catalog-panel-b}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{catalog-panel-3.png}
+        \caption{Interface search.}
+        \label{fig:catalog-panel-c}
+    \end{subfigure}
+    \caption[The catalog panel.]{The catalog panel: (a) browsing by name, (b) a name search, (c) an interface search with its provides and accepts grouping.}
+    \label{fig:catalog-panel}
+\end{figure}
+
+\FloatBarrier
+
+\pagebreak
+
+\subsection{Graph State Management}
+\label{sec:graph-state}
+
+The canvas state lives in a Zustand store, \texttt{graphStore}, the renderer's single source of truth for the editable graph. Every change on the canvas ends in a call on this store, which delegates the work to core functions (\S\ref{sec:hex-arch}) and keeps only lifecycle concerns of its own: the dirty flag, the selection sets, and the validator's flagged set. Five small stores share the renderer's state, and two pieces of glue tie them together (Figure~\ref{fig:state-management}).
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.92\textwidth}{!}{
+        \input{tex/diagrams/fig-5-2-state-management}
+    }
+    \caption[Renderer state management.]{Renderer state management.}
+    \label{fig:state-management}
+\end{figure}
+
+\paragraph{The store shape.}
+Beyond the graph, the store holds four lifecycle fields (Figure~\ref{fig:graphstore-class}): \texttt{dirty} (the gate UC4 checks), the two selection sets the canvas and the delete hotkey read, and \texttt{flaggedNodeIds} (the validator's snapshot set from \S\ref{sec:validation-engine}).
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.95\textwidth}{!}{
+        \input{tex/diagrams/fig-5-3-graphstore-class}
+    }
+    \caption[The \texttt{graphStore} class.]{The \texttt{graphStore} class}
+    \label{fig:graphstore-class}
+\end{figure}
+
+\pagebreak
+
+\paragraph{Changes delegate to core functions.}
+Every change method in the store is a one-line dispatch: it reads the current graph, hands it to a function in the core that returns the next graph, and writes the next graph back with the dirty flag set. Listing~\ref{lst:store-mutation} shows the pattern, and the same shape repeats for every change. The benefit is that the core function is the only thing the unit tests need to exercise.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[language=, caption={Store action pattern. \texttt{addNode} from the core is a pure function over the graph; the store action wraps it with the lifecycle update.}, label=lst:store-mutation, aboveskip=10pt]
+addNode: (node) => set((state) => ({
+  graph: addNode(state.graph, node),   // core function
+  dirty: true                          // lifecycle concern
+})),
+\end{lstlisting}
+\end{addmargin}
+
+
+\paragraph{Cascade delete in the core, not in the store.}
+Removing a node also removes every edge that references it. Putting the cascade in \texttt{graphOperations.removeNode} (rather than in the store action) keeps the rule unit-testable and reusable. \texttt{removeSelected} is a small generalisation: it walks the two selection sets and applies \texttt{removeNode} or \texttt{removeEdge} for each, then clears the selection.
+
+\paragraph{Reactive subscriptions.}
+The store uses Zustand's \texttt{subscribeWithSelector} middleware so \texttt{stateSubscriptions.ts} can react to derived slices: a graph change prunes selection and expansion identifiers that no longer resolve, and a workspace change clears the previous workspace's in-memory state.
+
+\paragraph{Cross-store commands.}
+Actions that span stores, such as export (graph, workspace, notification, dirty flag), live in \texttt{src/state/topologyCommands.ts} as plain async functions, so the topbar button and the Ctrl+S hotkey run the same sequence.
+
+\FloatBarrier
+
+\subsection{Canvas Rendering}
+\label{sec:canvas-impl}
+The canvas is built on React Flow~\cite{react_flow}. React Flow provides the substrate (pannable and zoomable viewport, node and edge primitives, port handles, connection drag visuals, selection box) and lets the application supply custom node and edge components. \texttt{CanvasPanel} is the assembly point: it registers the two custom types and wires every React Flow callback to a store action or a canvas hook, so the component itself holds little logic and the rules stay in the hooks and the core (Figure~\ref{fig:canvas-impl}).
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.9\textwidth}{!}{
+        \input{tex/diagrams/fig-5-5-canvas-interaction-impl}
+    }
+    \caption[Canvas components, hooks, core, and store.]{Canvas components and interactions}
+    \label{fig:canvas-impl}
+\end{figure}
+
+\paragraph{Custom node and edge types.}
+React Flow accepts a registry of named node types and edge types; the application uses one of each. \texttt{CanvasNode} renders the instance with input handles on the left, output handles on the right, and, when expanded, three configuration sections. \texttt{CanvasEdge} paints the edge gray by default and red when the validator marks it invalid; a selected edge is blue, and connected ports turn green.
+
+\paragraph{Hooks own the interactions.}
+The four interactions from \S\ref{sec:canvas-model} each live in their own hook under \texttt{src/components/canvas/hooks/} (Figure~\ref{fig:canvas-impl}): drop, connection, canvas hotkeys, and the bridge to React Flow's change events. Each is unit-tested with a stub store.
+
+\paragraph{Connection hook.}
+\texttt{useCanvasConnection} provides \texttt{isValidConnection} for the in-flight drag and \texttt{onConnect} for the release; both call \texttt{validateEdge} from \texttt{graphOperations.ts}, the single source of truth for what a valid edge is. An endpoint dropped on empty space deletes the edge rather than leaving it dangling.
+
+\paragraph{Edit hook and node sections.}
+An expanded node shows three sections (info, requirements, configuration); a per-type control renderer applies the per-field input constraints (\S\ref{sec:validation-impl}) and feeds each edit to \texttt{graphStore.updateNodeConfig}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\linewidth,keepaspectratio]{node-expand.png}
+    \caption[An expanded node on the canvas.]{An expanded node, showing the three sections and inline typed configuration fields.}
+    \label{fig:canvas-expanded-node}
+\end{figure}
+
+\paragraph{Hotkey hook and focus discipline.}
+\texttt{useCanvasHotkeys} installs a window-scope keydown listener and skips its handlers when the active element is a text input, so typing a digit into a configuration field does not also delete the node. The app-scope hotkey hook carries the same guard; the full key bindings are listed in \S\ref{sec:hotkeys}.
+
+\FloatBarrier
+
+\subsection{Topology Export and Import}
+\label{sec:topology-impl}
+Export and import are two core functions over the same data model, with thin adapters that wire them to the IPC layer. They are the only places where the graph representation and the wire representation meet. Figure~\ref{fig:domain-classes} is the data model, the graph on the left and the topology on the right; Figure~\ref{fig:topology-functions} is the step sequence each function runs.
+
+\clearpage
+\begin{figure}[H]
+    \centering
+    \resizebox{0.96\textwidth}{!}{
+        \input{tex/diagrams/fig-5-4-domain-classes}
+    }
+    \caption[The graph and topology data model.]{The graph and topology data model.}
+    \label{fig:domain-classes}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{\textwidth}
+        \centering
+        \resizebox{0.7\textwidth}{!}{\input{tex/diagrams/fig-5-10a-export-seq}}
+        \caption{Export: \texttt{graphToTopology}.}
+        \label{fig:topology-functions-export}
+    \end{subfigure}\\[6pt]
+    \begin{subfigure}{\textwidth}
+        \centering
+        \resizebox{0.7\textwidth}{!}{\input{tex/diagrams/fig-5-10b-import-seq}}
+        \caption{Import: \texttt{topologyToGraph}.}
+        \label{fig:topology-functions-import}
+    \end{subfigure}
+    \caption[The export and import function pipelines.]{The step sequence each function runs. (a) \texttt{graphToTopology} orders the graph and aligns each node's dependencies to its slots; (b) \texttt{topologyToGraph} parses the file and rebuilds each node from the catalog.}
+    \label{fig:topology-functions}
+\end{figure}
+
+\pagebreak
+
+\paragraph{Export.}
+\texttt{graphToTopology} emits the entries in dependency order with Kahn's algorithm (\S2.2.1), breaking ties by the node's original order so the output is deterministic. Each entry's dependency list comes from \texttt{depsFor}.
+
+\paragraph{}
+A topology entry's \texttt{dependencies} field aligns one-to-one with the component's declared input slots. For a non-array slot the entry is the source instance identifier; for an array slot the entry is a JSON array of identifiers (Listing~\ref{lst:depsfor}). The alignment lets the C++ constructor receive the right interface in the right argument position without parsing slot names at runtime. Empty array slots emit an empty array; unfilled non-array slots emit an empty string, which the structural validator catches at export time before \texttt{graphToTopology} is called.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[language=, caption={\texttt{depsFor}. Walks the component's declared input slots in order and emits one slot value per position.}, label=lst:depsfor, aboveskip=10pt]
+function depsFor(node, incomingEdges, nodeMap): TopologyDependency[] {
+  const inSlots = node.slots.filter(s => s.direction === 'in')
+  const bySlot = groupBy(incomingEdges.get(node.id) ?? [], e => e.targetSlot)
+  return inSlots.map(slot => {
+    const ids = (bySlot.get(slot.name) ?? []).map(e => nodeMap.get(e.sourceNodeId)?.instanceId)
+    return slot.isArray ? ids : (ids[0] ?? '')
+  })
+}
+\end{lstlisting}
+\end{addmargin}
+
+\paragraph{Import.}
+\texttt{topologyToGraph} reverses the operation: it rebuilds each node (type lookup, \texttt{buildSlots}, config copy) and seeds positions from \texttt{layoutByLevels}, which places nodes by topological depth so the graph reads left to right as node positions are not carried by the format.
+
+\paragraph{}
+\texttt{topologyToGraph} still returns a node when the entry's type is missing from the catalog. The canvas marks it unresolved at render time, finding no catalog entry for the node's type, and draws it in a dashed red frame with a warning, the behaviour motivated in \S\ref{sec:topology-io}.
+
+\FloatBarrier
+
+\subsection{Validation Engine}
+\label{sec:validation-impl}
+
+The two-phase design from \S\ref{sec:validation-engine} splits across two layers. The per-field phase is enforced at the configuration controls as the integrator types, and \texttt{updateNodeConfig} merges the committed value into the node. The structural phase lives in \texttt{validateGraph} under \texttt{core/graph}, triggers only at export time, and returns a flat result that the canvas uses to paint flagged nodes.
+
+\paragraph{Per-field validation lives on the node.}
+The per-field phase is constraint-based rather than a validation pass. \texttt{ConfigFieldRenderer} picks a control by the field's declared type: a numeric field renders an HTML number input carrying the type's range and step (the signed or unsigned integer bounds, or \texttt{step=any} for \texttt{float} and \texttt{double}), tightened by any \texttt{min} or \texttt{max} the schema declares; a string field caps its length with \texttt{maxLength}; a boolean renders a switch. The control constrains the value at entry, and \texttt{updateNodeConfig} commits a numeric edit only when it parses as a number, so an out-of-type value never reaches \texttt{configData}. There is no separate per-field error state; the structural validator below is the gate that blocks export.
+
+\paragraph{Structural result shape.}
+\texttt{validateGraph} returns a \texttt{GraphValidationResult}: a \texttt{valid} boolean plus three lists, one per failure class (Listing~\ref{lst:validation-result}). The shape is flat and serialisable, which makes the failure data round-trip through the renderer toast and the flagged-node set.
+
+\begin{addmargin}[0mm]{0mm}
+\begin{lstlisting}[language=, caption={The validation result. \texttt{cycles[i]} is a list of node identifiers forming the cycle; \texttt{unfilled[i]} carries the offending node and slot; \texttt{invalidEdges[i]} is the edge identifier.}, label=lst:validation-result, aboveskip=10pt]
+type UnfilledSlot = { 
+  nodeId: string; 
+  instanceId: string; 
+  slotName: string 
+}
+
+type GraphValidationResult = {
+  valid:        boolean
+  cycles:       string[][]
+  unfilled:     UnfilledSlot[]
+  invalidEdges: string[]
+}
+\end{lstlisting}
+\end{addmargin}
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.8\textwidth}{!}{
+        \input{tex/diagrams/fig-5-6-validation-impl}
+    }
+    \caption[How the structural validator composes.]{\texttt{validateGraph} runs three detectors, aggregates a single result, and the export command either writes the file or refuses it and flags the offending nodes.}
+    \label{fig:validation-impl}
+\end{figure}
+
+\paragraph{}
+Cycles are found by a depth-first search that keeps a recursion stack. When an edge reaches a node already on the stack, the path back to it is a cycle, rebuilt from the parent pointers kept during the descent; the search is linear and reports one entry per distinct cycle. Export reuses Kahn's algorithm only for ordering, so the dedicated search is what yields the actual cycle members Kahn does not surface.
+
+\paragraph{}
+\texttt{detectUnfilledRequiredSlots} counts incoming edges per (node, slot) pair, then reports the non-array slots whose count is zero. Array slots are deliberately excluded; an empty array is valid (the C++ side accepts a zero-length variadic). The result names the offending instance identifier rather than the internal node id.
+
+\paragraph{}
+The connection-time validator in \S\ref{sec:canvas-impl} rejects an invalid edge before it enters the graph. \texttt{validateGraph} re-checks every edge with \texttt{isEdgeInvalid} at export time anyway, catching an edge that became invalid through some other path, such as a catalog refresh that changed a slot's interface. The benefit is that the loader downstream of \texttt{diff-forge} never sees a structurally invalid edge.
+
+\paragraph{}
+On a failed export the command unions the node identifiers named by the three failure lists and hands the set to \texttt{graphStore.setFlaggedNodeIds}; the canvas paints those nodes. The set is pruned (never grown) on node removal and on \texttt{setGraph}, and a fresh export recomputes it. This ties the visual feedback to the last real validation decision without re-running cycle detection on every keystroke, which would put NFR-1.2 out of reach on a fifty-node graph.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth,height=0.5\textheight,keepaspectratio]{validation-flagged.png}
+    \caption[Flagged nodes after a blocked export.]{Nodes flagged by the structural validator after a blocked export.}
+    \label{fig:validation-flagged}
+\end{figure}
+
+\FloatBarrier
+
+\subsection{Workspace Flow and User Interface}
+\label{sec:workspace-ui}
+
+\texttt{App.tsx} is the renderer root. It wires three boot effects, picks the layout based on their results, and renders the global UI shell (Backdrop, toast host, hotkey hook). All three effects fire concurrently and the layout choice is the conjunction of "catalog is usable" and "workspace is valid".
+
+\begin{itemize}
+    \item The catalog effect calls \texttt{ipcCatalogSource.loadCatalog()} and writes the outcome to \texttt{catalogStore.setStatus}.
+    \item The workspace effect calls \texttt{ipcWorkspaceStore.getStatus()} and writes the outcome to \texttt{workspaceStore.setStatus}.
+    \item The topology effect waits for both to become \textit{ready}, then calls \\ \texttt{ipcWorkspaceStore.loadTopology()}, parses the result through \texttt{parseTopology}, reconstructs the graph, and writes it to \texttt{graphStore.setGraph}. The \texttt{lastLoadedCwd} ref gates the load on the workspace \texttt{cwd} differing from the last one loaded, so a stale catalog update cannot re-run the load and discard an in-progress edit.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.82\textwidth}{!}{
+        \input{tex/diagrams/fig-5-7-boot}
+    }
+    \caption[The boot sequence.]{The boot sequence. Effects A and B run concurrently; the layout is the welcome screen until both the catalog and the workspace are ready, after which the editor mounts and Effect C loads the topology.}
+    \label{fig:boot}
+\end{figure}
+
+\paragraph{The two layouts.}
+\texttt{MainLayout} is the editing surface: a fixed-width left column with the catalog panel, the canvas filling the rest, and a topbar across the top. \texttt{InitialLayout} is the welcome surface: a centered card with two sections, one per readiness signal that has not flipped to ready. \texttt{CatalogSection} surfaces the catalog status and a Retry that re-triggers \texttt{loadCatalog}. \texttt{WorkspaceSection} surfaces the reason the workspace is invalid and a folder picker; the user can also type a path, routed through \texttt{workspace.openAtPath}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth,height=0.5\textheight,keepaspectratio]{welcome.png}
+    \caption[The welcome screen.]{The welcome screen, shown until both the workspace and the catalog are ready.}
+    \label{fig:welcome}
+\end{figure}
+
+\paragraph{Topbar.}
+The topbar carries the workspace chip (clickable, opens the picker via the same command that the Ctrl+O hotkey runs), a Save Topology button (calls \texttt{exportTopology}, disabled when the workspace is invalid), a help icon (opens an About dialog), and a keyboard icon (opens the hotkey reference dialog).
+
+\paragraph{Dirty-aware workspace switch.}
+\texttt{topologyCommands.requestWorkspaceSwitch} reads \texttt{graphStore.dirty}. If false, it falls straight through to \texttt{performWorkspaceSwitch}. If true, it opens a confirmation dialog, and only switches workspace once the user confirms. \texttt{performWorkspaceSwitch} opens the native picker, and on success writes the new status to the store. The cwd change is observed by the topology effect, which re-runs and reconstitutes the new workspace's graph.
+
+\paragraph{Notifications.}
+\texttt{notificationsStore} is a small Zustand store holding a list of toast records (id, severity, message, timeout). Free \texttt{notify.*} helpers push a record and schedule its removal, and \texttt{NotificationHost} renders the list as a stack of Material UI (MUI) \texttt{Snackbar}s in the bottom-right corner. Most user actions end in exactly one toast; the queue exists so a multi-step action does not lose the earlier message.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth,keepaspectratio]{export-toast.png}
+    \caption[Export feedback toast.]{The toast shown after n success export.}
+    \label{fig:export-toast}
+\end{figure}
+
+\paragraph{Keyboard bindings.}
+\label{sec:hotkeys}
+Every authoring action reachable with the mouse is also reachable from the keyboard (NFR-3.1), and a reference dialog opened from the topbar lists the bindings (NFR-3.3). The bindings use \texttt{Ctrl} on every platform, with no per-operating-system remapping. Table~\ref{tab:hotkeys} lists them, and the reference dialog renders from the same binding list, so the documentation cannot drift from the behaviour.
+
+\begin{table}[H]
+\centering
+\caption[Keyboard bindings.]{Keyboard bindings. The same key is used on every platform.}
+\label{tab:hotkeys}
+\footnotesize
+\begin{tabular}{ll}
+\toprule
+\textbf{Key} & \textbf{Action} \\
+\midrule
+\texttt{Ctrl+S}             & Export the topology \\
+\texttt{Ctrl+O}             & Open or switch the workspace \\
+\texttt{Ctrl+A}             & Select every node and edge \\
+\texttt{Delete} / \texttt{Backspace} & Delete the current selection \\
+\texttt{Space} (hold)       & Temporarily pan the canvas \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The bindings stand down while a text input has focus (\S\ref{sec:canvas-impl}), so editing a configuration field never triggers a shortcut.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth,keepaspectratio]{hotkey.png}
+    \caption[The hotkey reference dialog.]{The hotkey reference dialog, reachable from the topbar without leaving the editor.}
+    \label{fig:hotkey-dialog}
+\end{figure}
+
+\FloatBarrier

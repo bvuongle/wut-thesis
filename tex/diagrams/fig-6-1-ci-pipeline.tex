@@ -1,0 +1,20 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    dev/.style={draw, rounded corners=2pt, fill=blue!10, text width=44mm, align=center, minimum height=10mm},
+    wf/.style={draw, rounded corners=2pt, fill=green!12, text width=52mm, align=center, minimum height=10mm},
+    arr/.style={-{Stealth}, thick},
+    lbl/.style={font=\scriptsize\itshape, align=center}
+]
+\node[dev] (dev) {\textbf{Developer machine} (macOS)\\ pre-commit hook:\\ lint-staged + unit/component suite};
+
+\node[wf, right=20mm of dev] (ci) {\textbf{ci.yml} (Ubuntu runner)\\ lint, type-check,\\ unit + component, end-to-end\\ (real packaged Electron)};
+\node[wf, below=11mm of ci] (val) {\textbf{validate.yml} (Ubuntu runner)\\ build the \texttt{.deb}, then run the\\ packaged-app smoke test on\\ Ubuntu-native and Windows/WSL2};
+\node[wf, below=11mm of val] (rel) {\textbf{release.yml}\\ run validate.yml, then publish\\ the \texttt{.deb} to a GitHub Release};
+
+\draw[arr] (dev) -- node[lbl, above]{push /\\ pull request} (ci);
+\draw[arr] (ci) -- node[lbl, right]{manual\\ dispatch} (val);
+\draw[arr] (val) -- node[lbl, right]{on success} (rel);
+
+\node[lbl, below=7mm of rel, text width=96mm]
+    {Development runs on macOS; every gate beyond the local pre-commit hook runs on Linux, the distribution target.};
+\end{tikzpicture}

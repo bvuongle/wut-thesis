@@ -1,0 +1,34 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    box/.style={draw, rounded corners=2pt, align=center, minimum height=8mm},
+    comp/.style={box, fill=blue!10, text width=40mm},
+    hook/.style={box, fill=cyan!12, text width=30mm},
+    core/.style={box, fill=green!12, text width=58mm},
+    store/.style={box, fill=orange!14, text width=40mm},
+    arr/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    lbl/.style={font=\scriptsize\itshape}
+]
+\node[comp] (panel) {\textbf{CanvasPanel}\\registers node/edge types, wires React Flow callbacks};
+
+\node[hook, below=10mm of panel, xshift=-34mm] (drop) {\textbf{useCatalogDrop}};
+\node[hook, below=10mm of panel] (conn) {\textbf{useCanvasConnection}};
+\node[hook, below=10mm of panel, xshift=34mm] (keys) {\textbf{useCanvasHotkeys}};
+
+\node[core, below=10mm of conn] (core) {\textbf{Core} (graph, catalog)\\ createNodeFromCatalog \\ validateEdge \\ graphOperations};
+\node[store, below=9mm of core] (store) {\textbf{graphStore}};
+\node[hook, right=12mm of store] (state) {\textbf{useCanvasState}};
+
+\draw[arr] (panel) -- (drop);
+\draw[arr] (panel) -- (conn);
+\draw[arr] (panel) -- (keys);
+\draw[arr] (drop) -- (core);
+\draw[arr] (conn) -- (core);
+\draw[arr] (keys) -- (core);
+\draw[arr] (core) -- node[lbl, right]{commit} (store);
+\draw[arr] (store) -- (state);
+\draw[ret] (state.east) -- ++(7mm,0) |- node[lbl, right]{re-render} (panel.east);
+
+\node[lbl, below=7mm of store, text width=92mm, align=center]
+    {React Flow event, then hook, then core decision, then store commit. \texttt{useCanvasState} syncs the store back to the view.};
+\end{tikzpicture}

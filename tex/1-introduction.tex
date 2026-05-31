@@ -2,27 +2,35 @@
 \section{Introduction}
 
 \subsection{Motivation}
-The rapid advancement of semiconductor technology and the increasing demand for sophisticated functionality in embedded systems have shifted the primary challenge of development from hardware constraints to software complexity~\cite{niespodziany2025}. As embedded devices integrate into critical infrastructure, such as automotive control units and industrial IoT gateways, the need for scalable and maintainable software architectures has never been greater. 
+In embedded systems development, the contribution of software engineering to overall cost of a product has grown steadily compared to hardware design in recent years~\cite{niespodziany2025}. This trend is driven by continuous advancements in semiconductor technology and the growth in customer demand for broader functionality. Embedded products are released as a family of variants rather than single devices~\cite{clements2001spl}. Since building and maintaining a separate codebase for each variant does not easily scale, the application is decomposed into reusable modules. These modules are often developed and maintained by independent engineering teams. Thus, the industry requires a mechanism to assemble them into a running application without recompiling the entire codebase for each specific product variant.
 
-In traditional embedded development, software components often exhibit coupling with the underlying hardware, hindering reusability across different projects. To address this, modular frameworks like \texttt{diff} utilize the Dependency Injection (DI) pattern~\cite{fowler2004di} to decouple component logic from system configuration. While this approach improves testability and flexibility, it introduces a new layer of complexity: the management of the dependency graph itself.
+The \textit{diff} framework~\cite{niespodziany2025} resolves this problem through data-driven composition. In this approach, modules are compiled into a shared binary and register themselves with the framework. At process startup, the framework reads a JavaScript Object Notation (JSON) topology file that explicitly determines which modules to instantiate, how each of them is configured, and the dependency relationships between them. Each topology file represents a completely different application variant from the exact same compiled binary.
 
-In the current workflow, developers must manually define the system topology in structured JSON files. While functional, this ``blind wiring'' process is inherently error-prone. As system complexity increases, detecting circular dependencies, identifying unfulfilled requirements, or understanding the architecture from a text-based file becomes a significant cognitive burden. A specialized tool that provides visual feedback and automated verification during the system composition phase is essential.
+However, writing the topology file remains a manual, error-prone process. The developer must ensure its structural correctness while working with limited tool support. This problem enlarges along with the size of the application and the broader ecosystem, such as the number of available modules, variant count, and team size.
+
+This thesis extends the future work identified in Niespodziany's research~\cite{niespodziany2025} by introducing \textbf{\textit{diff-forge}}: a visual editor that allows developers to manage the application's dependencies directly as a graph, while continuing to produce the exact JSON topology file consumed by the existing C++ build pipeline. The next section details the specific gaps that \textit{diff-forge} aims to resolve.
 
 \subsection{Problem Statement}
-The core problem addressed by this thesis is the lack of a visual management layer for the \texttt{diff} dependency injection framework. Specifically:
-\begin{itemize}
-    \item \textbf{High Cognitive Load:} Managing hundreds of component connections in a JSON format is difficult to audit and visualize.
-    \item \textbf{Delayed Error Detection:} Structural issues, such as dependency cycles, are often only caught at runtime, leading to expensive debugging cycles.
-    \item \textbf{Configuration Fragility:} Manually editing IDs and dependency arrays is susceptible to typos and reference errors that a standard text editor cannot verify.
-\end{itemize}
+The manual maintenance of \textit{diff} topology files leaves three distinct gaps in the current workflow. 
 
-\subsection{Project Goals and Scope}
-The primary goal of this project is to develop \texttt{diff-forge}, a cross-platform desktop application that enables developers to visually compose, verify, and export software topologies. The application utilizes modern web technologies including TypeScript, React~\cite{reactjs}, and Electron~\cite{electronjs}. The specific goals of the application include:
+\paragraph{Lack of module discovery.}
+Available modules are distributed across Artifactory repositories, often with many modules per repository and many versions per module. To compose a new system, the developer must be aware of what modules exist, what interfaces they expose, and what parameters they accept as module configuration.
+
+\paragraph{Lack of graph readability.}
+The dependency graph is currently encoded as text within a JSON file. Every architectural inquiry, such as tracing direct or transitive dependencies between modules, requires the developer to manually analyze from the JSON source. Without a visual representation, analyzing the system's structure becomes a time-consuming process.
+
+\paragraph{Lack of validation.}
+The JSON parser used during development provides syntactic correctness while lacking the capability of detecting per-entry lexical errors (e.g., invalid identifiers, incorrect references, or malformed values) or graph-structural errors (e.g., cycles, unmet required interfaces, or interface mismatches). These errors are caught only when the binary starts, in continuous integration (CI), or during code review. A broken build blocks other developers, and the responsibility for fixing it often falls to someone other than the original author~\cite{humble2010continuous}.
+
+\subsection{Project Objectives}
+The primary objective of this project is to close the three gaps identified in the problem statement while maintaining compatibility with the existing workflow by fulfilling the following criteria:
+
 \begin{itemize}
-    \item Providing an intuitive drag-and-drop interface for instantiating components from a managed catalog.
-    \item Implementing a real-time validation engine to prevent structural errors before they reach the production environment.
-    \item Ensuring seamless integration with existing C++ development workflows by exporting framework-compliant configuration files.
+    \item \textbf{Discover modules from the catalog:} The tool must fetch module metadata at application startup from Artifactory and transform the responses into a searchable catalog panel. This panel should display each module's name, version, and repository source.
+    \item \textbf{Compose the graph visually:} The tool must provide a drag-and-drop canvas where modules are represented as nodes and dependencies are represented as directed edges. Users instantiate modules by dragging them from the catalog, connect them by drawing edges, and configure them via inline fields on the nodes. This ensures the dependency graph is both read and edited structurally.
+    \item \textbf{Validate and report:} The tool must provide immediate, contextual validation. Lexical errors in each entry are flagged on the node or edge. Graph-structural errors are reported during export with feedback pinned to the offending entries.
+    \item \textbf{Export and import JSON topologies:} The tool must allow users to export the graph state to JSON files that comply with existing build pipelines. Additionally, it must allow the user to import a topology file, with validation performed beforehand to report corruption or schema mismatches at the location of the offending entry.
 \end{itemize}
 
 \subsection{Thesis Structure}
-The following chapters comprise this thesis: Chapter~2 reviews the state of the art in dependency injection and visual programming. Chapter~3 provides an overview of the \texttt{diff} framework and its target use cases. Chapter~4 describes the architectural design of \texttt{diff-forge}, while Chapter~5 details its implementation. Lastly, Chapter~6 evaluates the tool's effectiveness, followed by concluding remarks in Chapter~7.
+The remaining chapters of this thesis are structured as follows. Chapter~2 establishes the technical background, covering dependency injection, the \textit{diff} framework, and related work in visual composition. Chapter~3 analyzes the problem in detail, identifying personas, use cases, and architectural drivers. Chapter~4 justifies the architectural design, technology choices, and system layering, along with key design problems. Chapter~5 provides a walk-through of the implementation details. Chapter~6 evaluates \textit{diff-forge} against the traditional manual JSON workflow. Finally, Chapter~7 summarizes the contributions of this work and suggests directions for future research.

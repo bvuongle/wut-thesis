@@ -1,0 +1,35 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    head/.style={draw, rounded corners=2pt, fill=white, text width=26mm, minimum height=11mm, align=center, anchor=north},
+    life/.style={dashed, gray},
+    call/.style={-{Stealth}, thick},
+    msg/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+    side/.style={font=\scriptsize\itshape, align=center}
+]
+% Lifeline heads share one top edge (anchor=north at y=0) so messages stay horizontal.
+\def\sp{34mm}
+\node[head] (b) at (0*\sp, 0) {\texttt{exportTopology}\\\scriptsize renderer command};
+\node[head] (c) at (1*\sp, 0) {\texttt{electronAPI}\\\scriptsize preload bridge};
+\node[head] (d) at (2*\sp, 0) {\texttt{ipcMain}\\handler};
+\node[head] (e) at (3*\sp, 0) {\texttt{FsWorkspaceStore}\\\scriptsize main-side adapter};
+
+\def\botY{-50mm}
+\foreach \n in {b,c,d,e}{
+    \draw[life] (\n.south) -- (\n.south |- 0,\botY);
+}
+
+% Process boundary: one dashed vertical rule between preload (c) and main (d).
+\coordinate (pb) at ($(c)!0.5!(d)$);
+\draw[dashed, thick] (pb |- 0,4mm) -- (pb |- 0,\botY);
+\node[side, fill=white, inner sep=2pt] at (pb |- 0,7mm) {process boundary};
+
+\def\rA{-20mm}\def\rB{-31mm}\def\rC{-42mm}%
+
+% the one typed contract call
+\draw[call] (b.center |- 0,\rA) -- node[msg, above]{\texttt{topology.export(\{topology\})}} (c.center |- 0,\rA);
+% crosses the boundary
+\draw[call] (c.center |- 0,\rB) -- node[msg, above]{\texttt{invoke('topology:export')}} (d.center |- 0,\rB);
+% only the main side touches the disk
+\draw[call] (d.center |- 0,\rC) -- node[msg, above]{\texttt{saveTopology}} (e.center |- 0,\rC);
+\node[side, anchor=north east] at ($(e.center |- 0,\rC)+(0,-2mm)$) {writes the file\\(only the main side\\reaches the disk)};
+\end{tikzpicture}

@@ -1,0 +1,227 @@
+\clearpage
+\section{Architecture and Design}
+
+This chapter turns the architecture drivers from \S\ref{sec:arch-drivers} into a concrete design. \S\ref{sec:tech-selection} justifies the technology stack the rest of the design assumes. \S\ref{sec:hex-arch} determines the hexagonal layering of the codebase and the dependency rule that protects it. \S\ref{sec:catalog-ingestion} to \S\ref{sec:validation-engine} take the four largest design problems the drivers raise (catalog ingestion, canvas interaction, topology I/O, structural validation) and describe how each is solved at the design level.
+
+\subsection{Technology Selection}
+\label{sec:tech-selection}
+
+The technology stack is fixed by three drivers from \S\ref{sec:arch-drivers}: AD-2, AD-1, and the canvas requirement of FR-2.x with NFR-1.2. The candidate frameworks were compared in \S\ref{sec:cross-platform-frameworks}. Table~\ref{tab:tech-selection} records the choice made at each layer and the driver each choice answers.
+
+\begin{table}[ht]
+\centering
+\caption{Technology choices for \textit{diff-forge} and the architecture drivers they answer.}
+\label{tab:tech-selection}
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Layer} & \textbf{Choice} & \textbf{Primary driver} \\
+\midrule
+Application shell        & Electron 42              & AD-2 \\
+Main-process runtime     & Node.js 22 LTS           & AD-2 \\
+Renderer language        & TypeScript 5.8 (strict)  & AD-1 \\
+UI framework             & React 19                 & AD-2 \\
+Canvas library           & React Flow 12            & FR-2.x, NFR-1.2 \\
+State management         & Zustand 5                & AD-1 \\
+Component primitives     & Material UI 7            & NFR-3.x \\
+Schema validation        & Zod 3                    & AD-1, AD-5 \\
+Build tooling            & Vite 6 + pnpm 10         & NFR-4.3 \\
+Test stack               & Vitest, Playwright       & NFR-4.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Electron and TypeScript.}
+The application is built on Electron with TypeScript. The first reason is practical as the author is already familiar with TypeScript and web application developement. TypeScript brings two things the tool leans on. The UI ecosystem is mature with broad library support, above all React Flow (\S\ref{sec:canvas-model}) and Zod.
+
+The analysis in \S\ref{sec:cross-platform-frameworks} also shows that Electron is a suitable framework for cross-platform applications with a browser renderer, which can be leveraged during development. Electron's larger binary and heavier runtime are the trade-off, but the tool still meet the targets in \S\ref{sec:nfrs} as a single developer workstation tool.
+
+\paragraph{React Flow for the canvas.}
+The canvas is built on React Flow~\cite{react_flow}. In the early stage of the project, a custom canvas was written from scratch that drew the nodes, edges, and port connections. It proved inefficient on two counts. It took a large amount of time to build, and its performance did not meet NFR-1.2 as the graph grew. React Flow already gives a tuned node-and-edge user interface and the extension points the design needs: custom node and edge types and a callback that checks a connection as it is drawn (\S\ref{sec:canvas-model}), so the tool adopted it instead.
+
+\paragraph{Zustand for state.}
+The renderer keeps its state in Zustand stores~\cite{zustand}. AD-1 needs state we can test without rendering React, and a Zustand store is a plain object whose actions are ordinary functions, so a test calls them and checks the result directly. It is a small, modern library that keeps the state layer easy to read and to maintain, which is what a tool this size needs.
+
+\paragraph{Zod for runtime schema.}
+Both the catalog (from Artifactory) and the topology files (from disk) are loaded into the tool as untyped JSON. Zod gives a unified schema to check them before the core logic uses them. This includes the runtime check and the TypeScript type (\texttt{z.infer<typeof schema>}), so the parsed data cannot drift from the type the code expects. \S\ref{sec:catalog-impl} and \S\ref{sec:topology-impl} apply the same schema on read and on write.
+
+\paragraph{Linting and the CI/CD pipeline.}
+As required by NFR-4.3, ESLint carries the lint rules, including a rule that keeps renderer-only modules out of the main process, and Prettier formats the code and orders the imports by layer. The checks run at two points: a pre-commit hook is the fast local guard, and the continuous-integration pipeline runs the same checks on a clean machine and is the authoritative one. \S\ref{sec:project-structure} details the concrete configuration.
+
+\subsection{Hexagonal Architecture}
+\label{sec:hex-arch}
+AD-1 requires core logic and side-effectful code to live in separate layers, with the core testable on its own. The codebase meets this with a hexagonal (ports-and-adapters) architecture~\cite{cockburn2005hexagonal}. Six layers surround the core (Figure~\ref{fig:layers}), and the dependency rule runs one way, from the outside in.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.92\textwidth}{!}{
+        \input{tex/diagrams/fig-4-1-hexagonal-layers}
+    }
+    \caption[The hexagonal layering of \textit{diff-forge}.]{The hexagonal layering of \textit{diff-forge}.}
+    \label{fig:layers}
+\end{figure}
+
+\paragraph{Layer responsibilities.}
+\begin{itemize}
+    \item \textbf{Core.} Catalog merging, graph operations, topology serialisation, validation rules, and the workspace validity decision. No framework imports and no side effects, so every rule here is exercised by a unit test.
+    \item \textbf{Contracts.} The interfaces an adapter must satisfy: a catalog source, a catalog cache, and the host API the renderer calls. A contract names a shape, not an implementation.
+    \item \textbf{Adapters.} The concrete implementations of the contracts: the Artifactory-backed catalog source, the on-disk cache, the workspace and topology I/O, and the renderer-side client that forwards each call to the main process.
+    \item \textbf{State and orchestration.} The in-memory stores for the graph state, the catalog status, the current workspace, the transient UI, and the notification queue, plus a thin command layer that composes several stores for a single user action.
+    \item \textbf{View.} The React components, grouped into the major surfaces: canvas, catalog panel, topbar, welcome screen, and layout shell.
+    \item \textbf{Main process.} The operating-system side: window lifecycle, the typed bridge, and the main-side adapters the renderer cannot hold directly.
+\end{itemize}
+
+\paragraph{}
+Every arrow in Figure~\ref{fig:layers} points inward, toward the core. Each layer imports only the layers beneath it, and the core imports nothing from the project but the schema library. This direction is, for the most part, a convention the codebase follows. An ESLint \texttt{no-restricted-imports} rule~\cite{eslint} also guards the process boundary, keeping the renderer-only modules out of the main process, so the two processes do not couple by accident.
+
+\paragraph{}
+The renderer and the main process are different operating-system processes. The boundary between them is the host-API contract: the renderer holds a client adapter that forwards each call across it, a thin preload bridge exposes that call, and the main process answers it with the real adapter on its side.
+
+\paragraph{}
+The core logic is further divided into four bounded contexts (Figure~\ref{fig:bounded-contexts}). The \textit{catalog} context owns the published component metadata and the search and filter operations over it. The \textit{graph} context owns the in-memory representation of the canvas state. The \textit{topology} context owns the JSON wire format and the bidirectional translation between graph and topology. The \textit{workspace} context owns the launch directory, its validation, and the rule for what counts as a usable workspace. Cross-context references are few and explicit.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.85\textwidth}{!}{
+        \input{tex/diagrams/fig-4-2-bounded-contexts}
+    }
+    \caption[Bounded contexts inside the core.]{Bounded contexts inside the core. The graph context is the only one with state-shape responsibility (nodes, edges, configuration values). The other three are core transformations over their respective types.}
+    \label{fig:bounded-contexts}
+\end{figure}
+
+\FloatBarrier
+
+\subsection{Catalog Ingestion Pipeline}
+\label{sec:catalog-ingestion}
+AD-4 demands that authoring continue when the catalog server is unreachable. The pipeline therefore treats the network and the on-disk cache as two sources for the same data and returns the latest available. Figure~\ref{fig:catalog-pipeline} traces the path across four domains. The editor requests the catalog, the main process fans the request out to every configured repository in parallel, and each repository falls back to its own cache slice on failure; the surviving slices then merge into one catalog, and the renderer learns which slices are fresh and which are stale.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.95\textwidth}{!}{
+        \input{tex/diagrams/fig-4-3-catalog-pipeline}
+    }
+    \caption[Catalog ingestion across four domains.]{Catalog ingestion across four domains. Fetch and fall-back are decided per repository, so one repository's outage does not block the rest; the merge runs over the in-memory results, and only a fresh fetch updates the cache.}
+    \label{fig:catalog-pipeline}
+\end{figure}
+
+\paragraph{}
+The configured repository URLs and an access token are read once from the environment (\texttt{ARTIFACTORY\_REPOS} and \texttt{ARTIFACTORY\_TOKEN}). Each URL is queried in parallel and its published metadata validated against the catalog schema (the concrete fetch is in \S\ref{sec:catalog-impl}). A repository that returns a network or parse error does not abort the load; the pipeline reads that repository's slice from the cache and marks it \textit{stale}. A repository that fetches cleanly is \textit{ok}, and one with neither a fresh fetch nor a cache hit is \textit{failed}.
+
+\paragraph{}
+A fresh fetch is always attempted first; on success the pipeline rewrites that repository's cache slice one component at a time. The merge runs over the in-memory results rather than the on-disk cache, so the editor renders before any disk write happens and a failed cache write cannot corrupt the catalog the user sees in this session. Per-repository results reduce to one of four outcomes that the renderer pattern-matches. Table~\ref{tab:catalog-outcomes} lists the scenario that produces each outcome and how the editor responds.
+
+\begin{table}[H]
+\centering
+\caption[Catalog-load outcomes and the editor's response.]{Catalog-load outcomes: the scenario that produces each and how the editor responds.}
+\label{tab:catalog-outcomes}
+\footnotesize
+\begin{tabular}{l p{5.4cm} p{4.6cm}}
+\toprule
+\textbf{Outcome} & \textbf{When it occurs} & \textbf{Editor response} \\
+\midrule
+Ready        & Every repository fetched fresh.                                          & Catalog opens; no warning. \\
+Partial      & At least one slice is usable (fresh or stale) and at least one failed.    & Catalog opens; the topbar warns and names the failed repositories. \\
+Error        & No repository produced data, by fresh fetch or by cache.                  & Welcome screen with a retry. \\
+Unconfigured & No repository URLs were set in the environment.                          & Welcome screen explains how to set them. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+
+\subsection{Canvas Interaction Model}
+\label{sec:canvas-model}
+
+The canvas is where the integrator does the authoring work. Four interactions matter: dropping a catalog entry to create a node, drawing an edge between two ports, editing a node's configuration in place, and selecting and deleting parts of the graph. Each follows the same shape (Figure~\ref{fig:canvas-interaction}). The split keeps the canvas thin and moves every rule into a core function tested without a browser.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.78\textwidth}{!}{
+        \input{tex/diagrams/fig-4-5-canvas-interaction}
+    }
+    \caption[The shared canvas-interaction shape.]{The shared canvas-interaction shape. A UI event becomes a candidate change; the core decision accepts it (commit and re-render) or rejects it (no change).}
+    \label{fig:canvas-interaction}
+\end{figure}
+
+\paragraph{Drop to create.}
+Dragging a catalog tile onto the canvas creates a node. The drop is accepted only when it carries a diff-component payload, which keeps stray text or file drags from creating nodes, and the payload is re-validated against the catalog schema before anything is built. The new node takes a unique instance identifier (the type name plus the next free index), input and output ports built from the component's required and provided interfaces, and its declared default configuration.
+
+\paragraph{Connect to wire.}
+An edge runs from a provider port to a consumer port. The validity rule is a single core decision: the two slots must exist, point the right way (out to in), agree on interface type, hold at most one incoming edge on a non-array consumer slot, and not form a self-loop.
+
+\paragraph{Edit in place.}
+A node renders compact or expanded, and the expanded body holds its configuration fields. Expansion is a presentation concern held outside the graph, so a collapsed and an expanded node export the same JSON. A configuration edit is constrained at the input as the integrator types (\S\ref{sec:validation-engine}), without blocking the keystroke.
+
+\paragraph{Pan, zoom, select, delete.}
+Panning, zooming, and single or marquee selection are the canvas's direct-manipulation defaults. Keyboard shortcuts cover delete, select-all, and a momentary pan toggle. Deleting a node cascades to the edges that referenced it; the cascade is a core rule, covered by unit tests rather than left to the event handler.
+
+\FloatBarrier
+
+\subsection{Topology Export and Import}
+\label{sec:topology-io}
+AD-5 makes one round trip a hard constraint. A file exported by \textit{diff-forge} must load in the existing \textit{diff} loader unchanged, and a file re-opened by \textit{diff-forge} must rebuild the same graph that wrote it, apart from node positions, which the file does not carry. Export and import therefore round-trip the topology semantics over one wire format: the component set, the dependency wiring, and the configuration.
+
+\textit{diff-forge} writes the topology format from \S\ref{sec:diff-framework}, with one addition for multi-binding: an array slot emits a nested array of identifiers in its dependency field, a non-array slot a single one. Entries stay in dependency order, every component after the ones it depends on.
+
+\pagebreak
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \resizebox{\textwidth}{!}{\input{tex/diagrams/fig-4-6-export-pipeline}}
+        \caption{Export.}
+        \label{fig:export-pipeline}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \resizebox{\textwidth}{!}{\input{tex/diagrams/fig-4-8-import-pipeline}}
+        \caption{Import.}
+        \label{fig:import-pipeline}
+    \end{subfigure}
+    \caption[Topology export and import pipelines.]{Topology I/O pipelines. (a) Export pipeline with structural-validation. (b) Import pipeline with topology parsing logic.}
+    \label{fig:topology-io-pipelines}
+\end{figure}
+
+\paragraph{Export.}
+The export pipeline (Figure~\ref{fig:export-pipeline}) starts when the integrator requests a save. The structural validator (\S\ref{sec:validation-engine}) runs first and refuses the export on any failure, with the offending nodes flagged and no file written. On a valid graph, a core function serialises the entries in dependency order (Kahn's algorithm, \S2.2.1) and the main process writes the file, after which a notification names the file.
+
+\paragraph{Import.}
+The import pipeline (Figure~\ref{fig:import-pipeline}) is triggered at project startup or when user switching to new valid workspace. The editor reads the project file by the exporter's naming convention. A valid file is reconstructed entry by entry: each becomes a node with its type looked up in the catalog, its slots regenerated, its configuration copied, and the node placed by topological depth so the graph reads left to right. Edges follow from the dependency lists, and the reconstructed graph renders on the canvas.
+
+A topology may contain a component type no longer in the catalog, because the publisher retired the module or the file belongs to another project. Reconstruction keeps such a node, marks it unknown, and draws it in a distinct frame with a warning rather than refusing the whole file.
+
+\FloatBarrier
+
+\pagebreak
+
+\subsection{Validation}
+\label{sec:validation-engine}
+AD-3 splits validation into two phases that run on different triggers.
+
+\paragraph{Per-field validation, on canvas change.}
+Each component's configuration schema declares, for every parameter, a type, an optional range, and a default. The editor turns that declaration into a typed input control, so the value is constrained as the integrator types it (a number field carries the parameter's range, a text field its maximum length) without blocking the keystroke.
+
+\paragraph{Structural validation, at export.}
+The structural check runs once, when the integrator asks to save, and treats the graph as a whole. It either passes or refuses the export with a list of offenders. Three failure classes are recognised:
+
+\begin{itemize}
+    \item \textbf{Cycle.} A dependency chain returns to its start, so no dependency order exists. The nodes in the cycle are named.
+    \item \textbf{Unfilled required slot.} A required single-binding slot has no incoming edge. The node and the slot are named.
+    \item \textbf{Type-mismatched edge.} A provider's interface does not match the slot it feeds. The canvas blocks this at connection time, so the export check is defence in depth.
+\end{itemize}
+
+A duplicate instance identifier is not a structural class; it is prevented at edit time, since new nodes are auto-numbered and a rename that would collide is rejected.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.9\textwidth}{!}{
+        \input{tex/diagrams/fig-4-7-validation-outcome}
+    }
+    \caption[The two-trigger validation state machine.]{The two-trigger validation state machine.}
+    \label{fig:validation-outcome}
+\end{figure}
+
+\FloatBarrier
+

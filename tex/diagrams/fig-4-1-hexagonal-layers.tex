@@ -1,0 +1,27 @@
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, rounded corners=2pt, align=center, text width=32mm, minimum height=15mm, fill=white},
+    edge/.style={-{Stealth}, thick},
+    lbl/.style={font=\scriptsize, fill=white, inner sep=1.5pt}
+]
+\node[box] (view) {\textbf{View}\\[2pt]\scriptsize canvas, catalog panel, topbar, welcome};
+\node[box, below=9mm of view]     (state)     {\textbf{State +}\\\textbf{orchestration}\\[2pt]\scriptsize stores, cross-store commands};
+\node[box, below=9mm of state]    (adapters)  {\textbf{Adapters}\\[2pt]\scriptsize Artifactory, cache, workspace, \\ topology, IPC client};
+\node[box, below=9mm of adapters] (contracts) {\textbf{Contracts}\\[2pt]\scriptsize catalog source, cache, host API};
+
+\draw[edge] (view)     -- node[lbl]{imports}    (state);
+\draw[edge] (state)    -- node[lbl]{imports}    (adapters);
+\draw[edge] (adapters) -- node[lbl]{implements} (contracts);
+
+\node[box, text width=26mm,
+      fit={($(view.north)+(-58mm,0)$) ($(contracts.south)+(-32mm,0)$)}] (core)
+      {\textbf{Core}\\[2pt]\scriptsize catalog, graph,\\ topology, workspace};
+
+\draw[edge] (view.west)      -- node[lbl]{imports} (core.east |- view.west);
+\draw[edge] (state.west)     -- node[lbl]{imports} (core.east |- state.west);
+\draw[edge] (adapters.west)  -- node[lbl]{imports} (core.east |- adapters.west);
+\draw[edge] (contracts.west) -- node[lbl]{imports} (core.east |- contracts.west);
+
+\node[box, right=30mm of adapters] (main) {\textbf{Main process}\\[2pt]\scriptsize OS bridge: window, typed bridge, main-side adapters};
+\draw[edge] (adapters.east) -- node[lbl, above]{inter-process call} (main.west);
+\end{tikzpicture}

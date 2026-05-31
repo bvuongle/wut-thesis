@@ -1,0 +1,29 @@
+\begin{tikzpicture}[
+    font=\scriptsize,
+    head/.style={draw, rounded corners=2pt, fill=white, text width=30mm, minimum height=10mm, align=center, anchor=north},
+    life/.style={dashed, gray},
+    call/.style={-{Stealth}, thick},
+    ret/.style={-{Stealth}, thick, dashed},
+    msg/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+    frame/.style={draw, thick},
+    ftag/.style={draw, thick, fill=white, font=\scriptsize\bfseries, inner sep=2pt, anchor=north west}
+]
+\def\sp{44mm}
+\node[head] (gt) at (0,0) {\texttt{graphToTopology}};
+\node[head] (ks) at (\sp,0) {Kahn topo-sort};
+\node[head] (df) at (2*\sp,0) {\texttt{depsFor}};
+\def\botY{-56mm}
+\foreach \n in {gt,ks,df}{\draw[life] (\n.south) -- (\n.south |- 0,\botY);}
+
+\def\rA{-17mm}\def\rB{-25mm}\def\loopT{-31mm}\def\rC{-40mm}\def\rD{-48mm}\def\loopB{-52mm}
+
+\draw[call] (gt.center |- 0,\rA) -- node[msg,above]{order by dependency} (ks.center |- 0,\rA);
+\draw[ret]  (ks.center |- 0,\rB) -- node[msg,above]{nodes in dependency order} (gt.center |- 0,\rB);
+
+\draw[frame] (-12mm,\loopT) rectangle (2*\sp+12mm,\loopB);
+\node[ftag] at (-12mm,\loopT) {loop [per node]};
+\draw[call] (gt.center |- 0,\rC) -- node[msg,above]{align deps to slot order} (df.center |- 0,\rC);
+\draw[ret]  (df.center |- 0,\rD) -- node[msg,above]{dependency list} (gt.center |- 0,\rD);
+
+\node[msg, anchor=north west] at (-12mm,\botY) {result: the dependency-ordered \texttt{Topology}};
+\end{tikzpicture}
